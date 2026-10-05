@@ -50,7 +50,14 @@ Resultado (24 preludios, piano solo): **Temperley 18/24 (75 %)**, **Krumhansl-Sc
 | Temperley, 8 s, peso 0,5 | 23/24 | 20/24 |
 | KS, 4 s, peso 0,5 | 22/24 | 16/24 |
 
-Mejora todos los pesos probados con Temperley (+1 a +5 preludios), pero el máximo (8 s, 0,5) es un pico y está ajustado sobre estos mismos datos. Sigue **desactivado por defecto** (peso 0): las canciones con fundido final (fade-out) o que acaban fuera de la tónica pueden empeorar, y falta comprobarlo con pop y rock. Es música clásica con modulaciones, así que no es representativa de pop o rock.
+Comprobación en otros dos conjuntos, descargados de archive.org con licencia libre (listas en `tools/samples/`, con su identificador de archive.org en `*_sources.tsv`; el audio no está en el repo):
+
+| Conjunto | Temperley sin final | Temperley, 4 s, 0,5 | KS sin final | KS, 4 s, 0,5 |
+|---|---|---|---|---|
+| Sonatas de Beethoven, Chopin (12, dominio público) | 7/12 | 9/12 | 6/12 | 8/12 |
+| Rock, blues, funk, folk, electrónica y otros (14, Creative Commons) | 5/14 | 6/14 | 4/14 | 4/14 |
+
+En el segundo, la tonalidad es la que dice el título del autor y no está verificada; en las sonatas completas, los movimientos centrales pueden estar en otra tonalidad. Con la misma configuración (Temperley, 4 s, 0,5) el peso del final mejora en los cuatro conjuntos, pero con pocos archivos y poco margen en los no clásicos. Mejora todos los pesos probados con Temperley (+1 a +5 preludios), pero el máximo (8 s, 0,5) es un pico y está ajustado sobre estos mismos datos. Sigue **desactivado por defecto** (peso 0): las canciones con fundido final (fade-out) o que acaban fuera de la tónica pueden empeorar, y falta comprobarlo con pop y rock. Es música clásica con modulaciones, así que no es representativa de pop o rock.
 
 ## Hoja de ruta
 
