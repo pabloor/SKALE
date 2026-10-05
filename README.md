@@ -1,0 +1,48 @@
+# Skale
+
+Detecta la **escala de una canción**: tonalidad, notas de la escala, acordes diatónicos y los acordes que suenan. Objetivo final: un plugin de audio VST3/AU que funcione en tiempo real y con archivos mp3/wav.
+
+Estado: **fase 1** (núcleo del analizador + herramienta de línea de comandos). El plugin llega en la fase 2.
+
+## Cómo funciona
+
+1. **Cromagrama** (`src/analysis/Chromagram.*`): FFT con ventana Hann, picos espectrales entre 65 Hz y 2,1 kHz con interpolación parabólica, repartidos en 36 bins (3 por semitono). A partir del cromagrama acumulado se estima la afinación global (A=440 ±33 cents) y se pliega a 12 notas.
+2. **Tonalidad** (`KeyDetector.*`): correlación de Pearson con los perfiles de Temperley o de Krumhansl-Schmuckler en las 24 tonalidades. La "confianza" es un softmax de esas correlaciones: una heurística, no una probabilidad calibrada.
+3. **Teoría** (`Theory.*`): escala con la ortografía correcta (Eb mayor = Eb F G Ab Bb C D), acordes diatónicos con triadas, séptimas y números romanos.
+4. **Acordes** (`ChordDetector.*`): plantillas (mayor, menor, 7, maj7, m7, dim, sus2, sus4) con similitud coseno y suavizado Viterbi. Marca los acordes ajenos a la tonalidad.
+
+El extractor funciona en streaming (acepta bloques de cualquier tamaño), pensado para reutilizarlo en el plugin en tiempo real.
+
+## Compilar y probar
+
+    cmake -S . -B build
+    cmake --build build -j
+    ctest --test-dir build --output-on-failure
+
+Solo hace falta un compilador C++17 y CMake. `third_party/dr_libs` (dr_wav, dr_mp3) lee wav y mp3.
+
+## Línea de comandos
+
+    build/skale-cli cancion.mp3 --timeline
+    build/skale-cli cancion.wav --json --solfege
+    build/skale-cli cancion.wav --profile ks
+
+Opciones: `--json`, `--timeline` (línea de tiempo de acordes), `--solfege` (Do Re Mi), `--profile ks|temperley`.
+
+## Límites conocidos
+
+- Mayor y su relativo menor son ambiguos si la música no define el modo (Am F C G tiene las mismas notas que C mayor): por eso se devuelven candidatos con su confianza.
+- Un único cambio de tonalidad en la canción no se detecta (se promedia toda). Ventana deslizante: fase posterior.
+- Los tests usan audio sintético (acordes con armónicos, con y sin desafinación). Falta validar la precisión con canciones reales.
+
+## Hoja de ruta
+
+1. Núcleo del analizador y CLI ✅
+2. Plugin JUCE (VST3/AU) con tiempo real y vista mínima
+3. Análisis de archivos arrastrados al plugin
+4. Línea de tiempo de acordes en la interfaz
+5. Pulido de UI y empaquetado
+
+## Licencia
+
+Copyright © 2026 Pablo Olivares Rodriguez. **Todos los derechos reservados.** Ver [LICENSE](LICENSE).

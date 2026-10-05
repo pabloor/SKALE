@@ -1,0 +1,53 @@
+Copyright (c) 2026 Pablo Olivares Rodriguez. Todos los derechos reservados.
+Copyright (c) 2026 Pablo Olivares Rodriguez. All rights reserved.
+
+ESPAÑOL
+
+Este software y su documentación (en adelante, "Skale") son propiedad de
+Pablo Olivares Rodriguez. No se concede ninguna licencia ni derecho sobre
+Skale salvo lo que se indica expresamente a continuación o lo que el
+titular autorice por escrito.
+
+Queda prohibido, sin autorización previa y por escrito del titular:
+  - copiar, reproducir o redistribuir Skale, total o parcialmente;
+  - modificarlo, adaptarlo o crear obras derivadas;
+  - venderlo, alquilarlo, sublicenciarlo o ponerlo a disposición de terceros;
+  - descompilar o extraer su código para reutilizarlo en otros proyectos.
+
+El hecho de que el código sea visible en un repositorio público no implica
+ninguna licencia de uso, copia ni modificación.
+
+Skale se ofrece "tal cual", sin garantía de ningún tipo. El titular no será
+responsable de daños derivados de su uso.
+
+Componentes de terceros: Skale incluye software de terceros (dr_wav y dr_mp3,
+de David Reid, en third_party/dr_libs, de dominio público o MIT-0 a elección),
+que se rige por sus propias licencias. Esta licencia no modifica los derechos
+que esas licencias conceden sobre dichos componentes.
+
+Para solicitar permiso de uso: contacta con el titular.
+
+ENGLISH
+
+This software and its documentation ("Skale") are the property of
+Pablo Olivares Rodriguez. No licence or right to Skale is granted except
+as expressly stated below or as the owner authorises in writing.
+
+Without the owner's prior written permission, you may not:
+  - copy, reproduce or redistribute Skale, in whole or in part;
+  - modify it, adapt it or create derivative works;
+  - sell, rent, sublicense or make it available to third parties;
+  - decompile it or extract its code for reuse in other projects.
+
+The fact that the code is visible in a public repository does not grant any
+licence to use, copy or modify it.
+
+Skale is provided "as is", without warranty of any kind. The owner is not
+liable for any damage arising from its use.
+
+Third-party components: Skale includes third-party software (dr_wav and
+dr_mp3 by David Reid, in third_party/dr_libs, public domain or MIT-0 at your
+choice), which is governed by its own licences. This licence does not change
+the rights those licences grant over those components.
+
+To request permission to use it, contact the owner.
