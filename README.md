@@ -33,7 +33,15 @@ Opciones: `--json`, `--timeline` (línea de tiempo de acordes), `--solfege` (Do 
 
 - Mayor y su relativo menor son ambiguos si la música no define el modo (Am F C G tiene las mismas notas que C mayor): por eso se devuelven candidatos con su confianza.
 - Un único cambio de tonalidad en la canción no se detecta (se promedia toda). Ventana deslizante: fase posterior.
-- Los tests usan audio sintético (acordes con armónicos, con y sin desafinación). Falta validar la precisión con canciones reales.
+- Los tests usan audio sintético (acordes con armónicos, con y sin desafinación).
+
+## Validación con música real
+
+`tools/validate.py` pasa una carpeta de audio por la CLI y compara con un CSV de tonalidades esperadas (`tools/samples/wtc1_expected.csv`: los 24 preludios del Clave bien temperado, libro 1, en la grabación de Kimiko Ishizaka, dominio público, [archive.org](https://archive.org/details/bach-well-tempered-clavier-book-1)). El audio no está en el repo.
+
+    python3 tools/validate.py CARPETA --csv tools/samples/wtc1_expected.csv --profile temperley
+
+Resultado (24 preludios, piano solo): **Temperley 18/24 (75 %)**, **Krumhansl-Schmuckler 17/24 (71 %)**. Fallos de Temperley: 5 son el mayor relativo en lugar del menor (Mi menor→Sol mayor, etc.) y 1 es una quinta. Los de KS son sobre todo quintas y paralelas. Es música clásica con modulaciones, así que no es representativa de pop o rock.
 
 ## Hoja de ruta
 
