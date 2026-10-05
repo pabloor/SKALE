@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 
@@ -13,7 +14,9 @@ void usage() {
                  "  --json            salida en JSON\n"
                  "  --timeline        muestra la línea de tiempo de acordes\n"
                  "  --solfege         Do Re Mi en lugar de C D E\n"
-                 "  --profile <ks|temperley>   perfil de tonalidad (por defecto temperley)\n");
+                 "  --profile <ks|temperley>   perfil de tonalidad (por defecto temperley)\n"
+                 "  --ending-weight <w>        peso del acorde final en la tonalidad (0 = off)\n"
+                 "  --ending-seconds <s>       segundos finales que se miran (por defecto 4)\n");
 }
 
 std::string clock(double t) {
@@ -124,6 +127,10 @@ int main(int argc, char** argv) {
             if (!std::strcmp(p, "ks")) options.profile = skale::KeyProfile::KrumhanslSchmuckler;
             else if (!std::strcmp(p, "temperley")) options.profile = skale::KeyProfile::Temperley;
             else { usage(); return 2; }
+        } else if (!std::strcmp(arg, "--ending-weight") && i + 1 < argc) {
+            options.endingWeight = std::atof(argv[++i]);
+        } else if (!std::strcmp(arg, "--ending-seconds") && i + 1 < argc) {
+            options.endingSeconds = std::atof(argv[++i]);
         } else if (arg[0] == '-') { usage(); return 2; }
         else path = arg;
     }

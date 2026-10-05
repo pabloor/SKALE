@@ -31,7 +31,8 @@ double pearson(const double* x, const double* y) {
 
 }  // namespace
 
-std::vector<KeyCandidate> KeyDetector::detect(const Chroma12& chroma, KeyProfile profile) {
+std::vector<KeyCandidate> KeyDetector::detect(const Chroma12& chroma, KeyProfile profile,
+                                              const Chroma12* ending, double endingWeight) {
     double total = 0;
     for (float v : chroma) total += double(v);
     if (total <= 0.0) return {};
@@ -51,6 +52,12 @@ std::vector<KeyCandidate> KeyDetector::detect(const Chroma12& chroma, KeyProfile
             KeyCandidate c;
             c.key = {tonic, m == 0 ? Mode::Major : Mode::Minor};
             c.correlation = float(pearson(x, rotated));
+            if (ending && endingWeight > 0) {
+                const int third = m == 0 ? 4 : 3;
+                double triad = 0;
+                for (int d : {0, third, 7}) triad += double((*ending)[std::size_t((tonic + d) % 12)]);
+                c.correlation += float(endingWeight * triad);
+            }
             out.push_back(c);
         }
     }

@@ -44,7 +44,24 @@ SongAnalysis analyze(const float* mono, std::size_t n, double sampleRate, const 
     out.chroma = foldChroma(acc, tuning);
     normalize(out.chroma);
 
-    auto candidates = KeyDetector::detect(out.chroma, options.profile);
+    // Cromagrama de los últimos segundos con sonido (el final de la pieza).
+    Chroma12 ending{};
+    bool hasEnding = false;
+    if (options.endingWeight > 0 && options.endingSeconds > 0) {
+        Chroma36 endAcc{};
+        double lastTime = 0;
+        for (const auto& f : frames) if (!f.silent) lastTime = f.time;
+        for (const auto& f : frames) {
+            if (f.silent || f.time < lastTime - options.endingSeconds) continue;
+            for (std::size_t i = 0; i < 36; ++i) endAcc[i] += f.chroma[i];
+        }
+        ending = foldChroma(endAcc, tuning);
+        normalize(ending);
+        hasEnding = true;
+    }
+
+    auto candidates = KeyDetector::detect(out.chroma, options.profile,
+                                          hasEnding ? &ending : nullptr, options.endingWeight);
     if (candidates.empty()) return out;
     if (candidates.size() > options.maxCandidates) candidates.resize(options.maxCandidates);
     out.candidates = candidates;

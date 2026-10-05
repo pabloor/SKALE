@@ -41,7 +41,16 @@ Opciones: `--json`, `--timeline` (línea de tiempo de acordes), `--solfege` (Do 
 
     python3 tools/validate.py CARPETA --csv tools/samples/wtc1_expected.csv --profile temperley
 
-Resultado (24 preludios, piano solo): **Temperley 18/24 (75 %)**, **Krumhansl-Schmuckler 17/24 (71 %)**. Fallos de Temperley: 5 son el mayor relativo en lugar del menor (Mi menor→Sol mayor, etc.) y 1 es una quinta. Los de KS son sobre todo quintas y paralelas. Es música clásica con modulaciones, así que no es representativa de pop o rock.
+Resultado (24 preludios, piano solo): **Temperley 18/24 (75 %)**, **Krumhansl-Schmuckler 17/24 (71 %)**. Fallos de Temperley: 5 son el mayor relativo en lugar del menor (Mi menor→Sol mayor, etc.) y 1 es una quinta. Los de KS son sobre todo quintas y paralelas. Con la **ponderación del acorde final** (`--ending-weight`, `--ending-seconds`) se suma a la correlación de cada tonalidad el peso por la energía de su tríada tónica en los últimos segundos. Preludios / fugas (24 + 24, estas últimas no se usaron para elegir el peso):
+
+| Configuración | Preludios | Fugas |
+|---|---|---|
+| Temperley sin final | 18/24 | 16/24 |
+| Temperley, 4 s, peso 0,5 | 21/24 | 18/24 |
+| Temperley, 8 s, peso 0,5 | 23/24 | 20/24 |
+| KS, 4 s, peso 0,5 | 22/24 | 16/24 |
+
+Mejora todos los pesos probados con Temperley (+1 a +5 preludios), pero el máximo (8 s, 0,5) es un pico y está ajustado sobre estos mismos datos. Sigue **desactivado por defecto** (peso 0): las canciones con fundido final (fade-out) o que acaban fuera de la tónica pueden empeorar, y falta comprobarlo con pop y rock. Es música clásica con modulaciones, así que no es representativa de pop o rock.
 
 ## Hoja de ruta
 

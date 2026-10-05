@@ -39,12 +39,16 @@ def main():
     ap.add_argument('--cli', default='build/skale-cli')
     ap.add_argument('--csv')
     ap.add_argument('--profile', default='temperley')
+    ap.add_argument('--ending-weight', default='0')
+    ap.add_argument('--ending-seconds', default='4')
+    ap.add_argument('--quiet', action='store_true', help='solo la línea de resumen')
     a = ap.parse_args()
     folder = Path(a.folder)
     rows = list(csv.reader(open(a.csv or folder / 'expected.csv')))
     stats, total = {}, 0
     for fn, key in rows:
-        out = subprocess.run([a.cli, str(folder / fn), '--json', '--profile', a.profile],
+        out = subprocess.run([a.cli, str(folder / fn), '--json', '--profile', a.profile,
+                              '--ending-weight', a.ending_weight, '--ending-seconds', a.ending_seconds],
                              capture_output=True, text=True)
         if out.returncode:
             print(f'{fn}: ERROR {out.stderr.strip()}')
@@ -54,8 +58,9 @@ def main():
         res = classify(parse_key(key), got)
         stats[res] = stats.get(res, 0) + 1
         total += 1
-        print(f"{'OK ' if res == 'ok' else 'MAL'} {fn:28} esperada {key:10} detectada {k['name']:10} "
-              f"({k['confidence']:.2f}) {'' if res == 'ok' else res}")
+        if not a.quiet:
+            print(f"{'OK ' if res == 'ok' else 'MAL'} {fn:28} esperada {key:10} detectada {k['name']:10} "
+                  f"({k['confidence']:.2f}) {'' if res == 'ok' else res}")
     print(f"\nAcierto: {stats.get('ok', 0)}/{total} = {100 * stats.get('ok', 0) / max(total, 1):.0f}%  "
           + ' '.join(f'{k}={v}' for k, v in sorted(stats.items()) if k != 'ok'))
     return 0
