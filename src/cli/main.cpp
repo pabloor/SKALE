@@ -12,7 +12,7 @@ void usage() {
     std::fprintf(stderr,
                  "Uso: skale-cli <archivo.wav|archivo.mp3> [opciones]\n"
                  "  --json            salida en JSON\n"
-                 "  --model <classic|learned>  modelo de tonalidad (por defecto classic)\n"
+                 "  --model <classic|learned>  modelo de tonalidad (por defecto learned; classic usa --profile y los pesos)\n"
                  "  --features        volcado de cromagramas y uso de acordes (JSON, para experimentos)\n"
                  "  --timeline        muestra la línea de tiempo de acordes\n"
                  "  --solfege         Do Re Mi en lugar de C D E\n"
