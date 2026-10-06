@@ -39,18 +39,18 @@ def main():
     ap.add_argument('--cli', default='build/skale-cli')
     ap.add_argument('--csv')
     ap.add_argument('--profile', default='temperley')
-    ap.add_argument('--ending-weight', default='0')
-    ap.add_argument('--ending-seconds', default='4')
-    ap.add_argument('--ending-margin', default='1e9')
+    ap.add_argument('--ending-weight', default=None, help='por defecto el de la CLI')
+    ap.add_argument('--ending-seconds', default=None)
+    ap.add_argument('--ending-margin', default=None)
     ap.add_argument('--quiet', action='store_true', help='solo la línea de resumen')
     a = ap.parse_args()
     folder = Path(a.folder)
     rows = list(csv.reader(open(a.csv or folder / 'expected.csv')))
     stats, total = {}, 0
     for fn, key in rows:
-        out = subprocess.run([a.cli, str(folder / fn), '--json', '--profile', a.profile,
-                              '--ending-weight', a.ending_weight, '--ending-seconds', a.ending_seconds,
-                              '--ending-margin', a.ending_margin],
+        extra = [x for opt, v in (('--ending-weight', a.ending_weight), ('--ending-seconds', a.ending_seconds),
+                                  ('--ending-margin', a.ending_margin)) if v is not None for x in (opt, v)]
+        out = subprocess.run([a.cli, str(folder / fn), '--json', '--profile', a.profile, *extra],
                              capture_output=True, text=True)
         if out.returncode:
             print(f'{fn}: ERROR {out.stderr.strip()}')

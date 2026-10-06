@@ -15,7 +15,7 @@ void usage() {
                  "  --timeline        muestra la línea de tiempo de acordes\n"
                  "  --solfege         Do Re Mi en lugar de C D E\n"
                  "  --profile <ks|temperley>   perfil de tonalidad (por defecto temperley)\n"
-                 "  --ending-weight <w>        peso del acorde final en la tonalidad (0 = off)\n"
+                 "  --ending-weight <w>        peso del acorde final en la tonalidad (0 = off, por defecto 0.5)\n"
                  "  --ending-margin <m>        el final solo desempata tonalidades a <m de la mejor (por defecto sin límite)\n"
                  "  --ending-seconds <s>       segundos finales que se miran (por defecto 4)\n");
 }
