@@ -12,6 +12,8 @@ void usage() {
     std::fprintf(stderr,
                  "Uso: skale-cli <archivo.wav|archivo.mp3> [opciones]\n"
                  "  --json            salida en JSON\n"
+                 "  --model <classic|learned>  modelo de tonalidad (por defecto classic)\n"
+                 "  --features        volcado de cromagramas y uso de acordes (JSON, para experimentos)\n"
                  "  --timeline        muestra la línea de tiempo de acordes\n"
                  "  --solfege         Do Re Mi en lugar de C D E\n"
                  "  --profile <ks|temperley>   perfil de tonalidad (por defecto temperley)\n"
@@ -117,7 +119,7 @@ void printJson(const skale::SongAnalysis& a, bool timeline) {
 
 int main(int argc, char** argv) {
     std::string path;
-    bool json = false, timeline = false;
+    bool json = false, timeline = false, features = false;
     skale::AnalysisOptions options;
 
     for (int i = 1; i < argc; ++i) {
@@ -132,6 +134,13 @@ int main(int argc, char** argv) {
             else { usage(); return 2; }
         } else if (!std::strcmp(arg, "--ending-weight") && i + 1 < argc) {
             options.endingWeight = std::atof(argv[++i]);
+        } else if (!std::strcmp(arg, "--model") && i + 1 < argc) {
+            const char* mname = argv[++i];
+            if (!std::strcmp(mname, "learned")) options.learnedModel = true;
+            else if (!std::strcmp(mname, "classic")) options.learnedModel = false;
+            else { usage(); return 2; }
+        } else if (!std::strcmp(arg, "--features")) {
+            features = true;
         } else if (!std::strcmp(arg, "--bass-weight") && i + 1 < argc) {
             options.bassWeight = std::atof(argv[++i]);
         } else if (!std::strcmp(arg, "--chord-weight") && i + 1 < argc) {
@@ -158,6 +167,24 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    if (features) {
+        // Volcado para experimentar con modelos fuera de C++: cromagramas y uso de acordes.
+        auto arr = [](const skale::Chroma12& c) {
+            std::printf("[");
+            for (int i = 0; i < 12; ++i) std::printf("%s%.6f", i ? "," : "", double(c[std::size_t(i)]));
+            std::printf("]");
+        };
+        std::printf("{\"chroma\":"); arr(a.chroma);
+        std::printf(",\"bass\":"); arr(a.bassChroma);
+        std::printf(",\"ending\":"); arr(a.endingChroma);
+        std::printf(",\"duration\":%.2f,\"chords\":[", a.durationSeconds);
+        for (std::size_t i = 0; i < a.chordUsage.size(); ++i) {
+            const auto& u = a.chordUsage[i];
+            std::printf("%s[%d,%d,%.3f]", i ? "," : "", u.chord.root, int(u.chord.type), u.seconds);
+        }
+        std::printf("]}\n");
+        return 0;
+    }
     if (json) printJson(a, timeline);
     else printText(a, timeline);
     return 0;

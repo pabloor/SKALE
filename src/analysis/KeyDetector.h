@@ -38,6 +38,12 @@ public:
 
     // Puntuación extra por tonalidad a partir del cromagrama del bajo (suma 1):
     // weight x (tónica + 0,5 x quinta). Indexada como `extra` de detect().
+    // Modelo aprendido (ver KeyModelWeights.h): ordena las 24 tonalidades con una
+    // puntuación lineal sobre la correlación de Temperley, el bajo y (si se da)
+    // el final. `confidence` es el softmax de esas puntuaciones (logits).
+    static std::vector<KeyCandidate> detectLearned(const Chroma12& chroma, const Chroma12& bass,
+                                                   const Chroma12* ending);
+
     static std::array<float, 24> bassScores(const Chroma12& bass, double weight);
 };
 

@@ -65,9 +65,10 @@ SongAnalysis analyze(const float* mono, std::size_t n, double sampleRate, const 
     // Puntuaciones extra por tonalidad: bajo y acordes.
     std::array<float, 24> extra{};
     bool hasExtra = false;
+    Chroma12 bass = foldChroma(bassAcc, tuning);
+    normalize(bass);
+    out.bassChroma = bass;
     if (options.bassWeight > 0) {
-        Chroma12 bass = foldChroma(bassAcc, tuning);
-        normalize(bass);
         const auto bs = KeyDetector::bassScores(bass, options.bassWeight);
         for (std::size_t i = 0; i < 24; ++i) extra[i] += bs[i];
         hasExtra = true;
@@ -102,7 +103,7 @@ SongAnalysis analyze(const float* mono, std::size_t n, double sampleRate, const 
     // Cromagrama de los últimos segundos con sonido (el final de la pieza).
     Chroma12 ending{};
     bool hasEnding = false;
-    if (options.endingWeight > 0 && options.endingSeconds > 0) {
+    if (options.endingSeconds > 0) {
         Chroma36 endAcc{};
         double lastTime = 0;
         for (const auto& f : frames) if (!f.silent) lastTime = f.time;
@@ -112,10 +113,13 @@ SongAnalysis analyze(const float* mono, std::size_t n, double sampleRate, const 
         }
         ending = foldChroma(endAcc, tuning);
         normalize(ending);
-        hasEnding = true;
+        out.endingChroma = ending;
+        hasEnding = options.endingWeight > 0;
     }
 
-    auto candidates = KeyDetector::detect(out.chroma, options.profile,
+    auto candidates = options.learnedModel
+        ? KeyDetector::detectLearned(out.chroma, out.bassChroma, options.endingSeconds > 0 ? &out.endingChroma : nullptr)
+        : KeyDetector::detect(out.chroma, options.profile,
                                           hasEnding ? &ending : nullptr, options.endingWeight,
                                           options.endingMargin, hasExtra ? &extra : nullptr);
     if (candidates.empty()) return out;

@@ -1,4 +1,5 @@
 #include "analysis/KeyDetector.h"
+#include "analysis/KeyModelWeights.h"
 
 #include <algorithm>
 #include <cmath>
@@ -96,6 +97,55 @@ std::array<float, 24> KeyDetector::bassScores(const Chroma12& bass, double weigh
         out[std::size_t(t * 2 + 1)] = v;
     }
     return out;
+}
+
+std::vector<KeyCandidate> KeyDetector::detectLearned(const Chroma12& chroma, const Chroma12& bass,
+                                                     const Chroma12* ending) {
+    double total = 0;
+    for (float v : chroma) total += double(v);
+    if (total <= 0.0) return {};
+
+    double x[12];
+    for (int i = 0; i < 12; ++i) x[i] = double(chroma[std::size_t(i)]);
+
+    std::vector<KeyCandidate> out;
+    std::vector<double> logit;
+    for (int tonic = 0; tonic < 12; ++tonic) {
+        for (int m = 0; m < 2; ++m) {
+            const double* prof = m == 0 ? kTempMajor : kTempMinor;
+            double rotated[12];
+            for (int i = 0; i < 12; ++i) rotated[i] = prof[((i - tonic) % 12 + 12) % 12];
+            const float* w = ending ? model::kFull[m] : model::kLive[m];
+            const double corr = pearson(x, rotated);
+            double score = double(w[0]) * corr;
+            int k = 1;
+            for (int i = 0; i < 12; ++i) score += double(w[k + i]) * 12.0 * double(bass[std::size_t((tonic + i) % 12)]);
+            k += 12;
+            if (ending) {
+                for (int i = 0; i < 12; ++i) score += double(w[k + i]) * 12.0 * double((*ending)[std::size_t((tonic + i) % 12)]);
+            }
+            KeyCandidate c;
+            c.key = {tonic, m == 0 ? Mode::Major : Mode::Minor};
+            c.correlation = float(corr);
+            out.push_back(c);
+            logit.push_back(score);
+        }
+    }
+
+    std::vector<std::size_t> order(out.size());
+    for (std::size_t i = 0; i < order.size(); ++i) order[i] = i;
+    std::sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) { return logit[a] > logit[b]; });
+    if (logit[order.front()] - logit[order.back()] < 1e-9) return {};
+
+    double denom = 0;
+    for (double l : logit) denom += std::exp(l - logit[order.front()]);
+    std::vector<KeyCandidate> sorted;
+    for (std::size_t i : order) {
+        KeyCandidate c = out[i];
+        c.confidence = float(std::exp(logit[i] - logit[order.front()]) / denom);
+        sorted.push_back(c);
+    }
+    return sorted;
 }
 
 }  // namespace skale

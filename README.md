@@ -76,6 +76,20 @@ Las cifras del 70-78 % en Jamendo se midieron sobre temas **etiquetados por cons
 
 Es decir: **en música real no clásica, Skale acierta alrededor del 50-55 %, igual que Essentia y librosa**, y el 78 % de arriba no debe leerse como la precisión esperada. La mitad de los fallos son el relativo menor o la quinta. Un tema con una tonalidad ambigua (beats con poca armonía, tonalidades modales) también cuenta como fallo. Con 29 temas el error típico es de ±9 puntos.
 
+### Modelo de tonalidad aprendido (`--model learned`, opcional)
+
+Con **GuitarSet** (360 fragmentos de guitarra con la tonalidad anotada por personas, CC BY 4.0, [Zenodo](https://zenodo.org/records/3371780); el audio no está en el repo, solo `tools/samples/guitarset_expected.csv`) y los demás conjuntos hay 596 archivos etiquetados. Sobre ellos, `tools/extract_features.py` vuelca las características (`--features` de la CLI) y `tools/train_key_model.py` aprende, por modo, pesos para `[correlación de Temperley, bajo rotado, final rotado]` (regresión logística condicional sobre las 24 tonalidades). Las características ya volcadas están en `tools/samples/features.json`.
+
+Validación **dejando un conjunto entero fuera** (se entrena con los demás y se mide en él: la cifra honesta), media por conjunto / total:
+
+| | Media por conjunto | Total (596) | GuitarSet |
+|---|---|---|---|
+| Actual (`classic`: Temperley + final 0,5 + bajo 1) | 66,0 % | 61,9 % | 199/360 |
+| **Aprendido, con final (`--model learned`)** | **73,5 %** | **66,3 %** | **59 %** (≈ 214/360) |
+| Aprendido, sin final (para tiempo real) | 66,2 % | 63,4 % | 57 % |
+
+El aprendido mejora en 5 de 6 conjuntos (empeora ~3 puntos en los temas con etiqueta de autor). Con todos los datos en el entrenamiento da 427/596 (71,6 %), cifra optimista: la de arriba es la que debe esperarse. Los acordes detectados, KS, el sesgo por modo y raíces cuadradas del cromagrama no aportaron nada. Sigue desactivado por defecto. Fue clave reentrenar con etiquetas verificadas: el acierto en GuitarSet (música real tocada por personas) es del 55-59 %, no el 78 % que daban las etiquetas por consenso.
+
 ## Límites conocidos
 
 - Mayor y su relativo menor son ambiguos si la música no define el modo (Am F C G tiene las mismas notas que C mayor): por eso se devuelven candidatos con su confianza.
