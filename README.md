@@ -78,7 +78,7 @@ Es decir: **en música real no clásica, Skale acierta alrededor del 50-55 %, ig
 
 ### Modelo de tonalidad aprendido (`--model learned`, **por defecto** al analizar archivos)
 
-Con **GuitarSet** (360 fragmentos de guitarra con la tonalidad anotada por personas, CC BY 4.0, [Zenodo](https://zenodo.org/records/3371780); el audio no está en el repo, solo `tools/samples/guitarset_expected.csv`), los demás conjuntos y 108 progresiones sintéticas (`tools/gen_synth_training.py`) hay 2.062 archivos etiquetados (ver «Datos de electrónica» más abajo). `tools/extract_features.py` vuelca las características (`--features` de la CLI, ya volcadas en `tools/samples/features.json`) y `tools/train_key_model.py` aprende, por modo, pesos para `[correlación de Temperley, bajo rotado, final rotado, voto por ventanas]` (regresión logística condicional sobre las 24 tonalidades, `KeyModelWeights.h`). `--model classic` vuelve al método anterior (con `--profile` y los pesos manuales; el aprendido los ignora).
+Con **GuitarSet** (360 fragmentos de guitarra con la tonalidad anotada por personas, CC BY 4.0, [Zenodo](https://zenodo.org/records/3371780); el audio no está en el repo, solo `tools/samples/guitarset_expected.csv`), los demás conjuntos y 108 progresiones sintéticas (`tools/gen_synth_training.py`) hay 7.546 archivos etiquetados (ver «Datos de electrónica» más abajo). `tools/extract_features.py` vuelca las características (`--features` de la CLI, ya volcadas en `tools/samples/features.json`) y `tools/train_key_model.py` aprende, por modo, pesos para `[correlación de Temperley, bajo rotado, final rotado, voto por ventanas]` (regresión logística condicional sobre las 24 tonalidades, `KeyModelWeights.h`). `--model classic` vuelve al método anterior (con `--profile` y los pesos manuales; el aprendido los ignora).
 
 **Voto por ventanas:** el audio se divide en ventanas de 8 s (paso de 4 s) y cada una «vota» por su mejor tonalidad con Temperley; la característica es la fracción de ventanas que votan por cada candidata (ventanas de 4 s o 16 s dan resultados parecidos, 8 s el mejor). Aportó +3 puntos de media validada fuera de conjunto.
 
@@ -98,6 +98,23 @@ Validación **dejando un conjunto entero fuera** (se entrena con los demás y se
 | **Beatport EDM (1.100)** | 34 % | 41 % (fuera de dominio) | **49 %** |
 
 En las columnas «sin datos EDM» GiantSteps+ y Beatport no estaban en el entrenamiento. Acierto de **escala** (tónica y modo, o su relativa) sobre estos mismos conjuntos: ~78 % de media. Con todos los datos en el entrenamiento el acierto es mayor, pero esa cifra es optimista: la de arriba es la que debe esperarse. Para referencia, en la literatura los sistemas de tonalidad sobre GiantSteps rondan el 60–75 %.
+
+**FMAK (rock, pop, folk…):** [FMAKv2](https://zenodo.org/records/12759100) tiene tonalidad y modo anotados por expertos para 5.489 pistas de Free Music Archive de 17 géneros (CC BY 4.0). El audio (clips de 30 s de FMA, licencias Creative Commons) se descarga con `tools/get_fmak.py`, que lo saca por rangos del zip de 100 GB sin bajarlo entero. Es el conjunto más grande y más cercano a música «normal». Resultados del modelo **antes de entrenar con él** (5.484 pistas):
+
+| Género (n) | Tonalidad | Escala (con relativa) |
+|---|---|---|
+| **Total (5.484)** | **51,2 %** | **60,6 %** |
+| Rock (872) | 42 % | 50 % |
+| Electrónica (634) | 53 % | 64 % |
+| Folk (274) | 58 % | 67 % |
+| Pop (153) | 57 % | 69 % |
+| Hip hop (152) | 50 % | 55 % |
+| Instrumental (129) | 63 % | 71 % |
+| Clásica (53) | 25 % | 34 % |
+
+Con la métrica estándar del campo (MIREX ponderada: 1 acierto, 0,5 quinta, 0,3 relativa, 0,2 paralela) da **0,626 en FMAK**, 0,633 en Beatport y 0,808 en GiantSteps+ (estos dos últimos entrenados con ellos). Los fallos en FMAK son: quinta 15 %, relativa 9 %, paralela 5 %, otros 19 %. Entrenar además con 4.400 de estas pistas **no mejora FMAK** (51,4 % frente a 51,2 %): el modelo lineal ya no aprende más de estas características. Árboles con refuerzo de gradiente y más datos: 52,6–53,5 % (+1–2 puntos, no compensa el coste). Las etiquetas son de canción completa pero el audio es un clip de 30 s del medio, así que parte del error es ruido de etiqueta. **Esta es la cifra que debe esperarse en música real: ≈ 51 % de tonalidad exacta y ≈ 61 % de escala; en rock, 42 % y 50 %.**
+
+Al tratar el «final» como no disponible en los fragmentos (porque no son el final de la canción) el resultado empeora (media 68,8 % → 66,6 %): los últimos 4 s de un fragmento también aportan evidencia de tónica.
 
 **Probado sin mejora** (con validación fuera de conjunto): ajustes del cromagrama (compresión de amplitud γ 0,3–1,0, rango de frecuencias 65–1200/2100/4000 Hz, mínimo 100 Hz, umbral de picos 0,01–0,1: todos entre 73,9 % y 76,0 % frente al 75,2 % base, o sea ruido), cromagrama de inicio, tiempo en el acorde de tónica, cadencias V→I / IV→I / VII→I, primer y último acorde (±1 punto), votos suaves o con el bajo, correlación media por ventana, y árboles con refuerzo de gradiente (68,6–69,2 % frente a 70,3 % del lineal). El modelo lineal parece cerca del techo de estas características; el límite es ahora la ambigüedad de las propias etiquetas (modos, tonalidades que cambian) y la cantidad de datos verificados en cada género.
 
