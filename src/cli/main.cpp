@@ -139,6 +139,8 @@ int main(int argc, char** argv) {
             if (!std::strcmp(mname, "learned")) options.learnedModel = true;
             else if (!std::strcmp(mname, "classic")) options.learnedModel = false;
             else { usage(); return 2; }
+        } else if (!std::strcmp(arg, "--window") && i + 1 < argc) {
+            options.windowSeconds = std::atof(argv[++i]);
         } else if (!std::strcmp(arg, "--features")) {
             features = true;
         } else if (!std::strcmp(arg, "--bass-weight") && i + 1 < argc) {
@@ -177,10 +179,24 @@ int main(int argc, char** argv) {
         std::printf("{\"chroma\":"); arr(a.chroma);
         std::printf(",\"bass\":"); arr(a.bassChroma);
         std::printf(",\"ending\":"); arr(a.endingChroma);
+        std::printf(",\"start\":"); arr(a.startChroma);
         std::printf(",\"duration\":%.2f,\"chords\":[", a.durationSeconds);
         for (std::size_t i = 0; i < a.chordUsage.size(); ++i) {
             const auto& u = a.chordUsage[i];
             std::printf("%s[%d,%d,%.3f]", i ? "," : "", u.chord.root, int(u.chord.type), u.seconds);
+        }
+        std::printf("],\"win\":[");
+        for (std::size_t i = 0; i < a.windows.size(); ++i) {
+            std::printf("%s[", i ? "," : "");
+            arr(a.windows[i].chroma); std::printf(","); arr(a.windows[i].bass);
+            std::printf("]");
+        }
+        std::printf("],\"seq\":[");
+        bool first = true;
+        for (const auto& e : a.timeline) {
+            if (e.chord.none) continue;
+            std::printf("%s[%d,%d,%.2f,%.2f]", first ? "" : ",", e.chord.root, int(e.chord.type), e.start, e.end);
+            first = false;
         }
         std::printf("]}\n");
         return 0;

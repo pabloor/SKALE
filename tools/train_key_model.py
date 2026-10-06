@@ -3,16 +3,16 @@
 tonalidades) con las características de tools/extract_features.py.
 
 Para cada tonalidad (tónica t, modo m) la puntuación es lineal en
-  [corr. de Temperley, bajo rotado (12), final rotado (12)]   modelo "full"
+  [corr. de Temperley, bajo rotado (12), final rotado (12), 3 x voto por ventanas]   modelo "full"
   [corr. de Temperley, bajo rotado (12)]                        modelo "live"
 con un vector de pesos por modo. Muestras ponderadas para que cada conjunto
 pese igual. Imprime la validación dejando un conjunto fuera ("LOGO"), que es la
 cifra honesta, y escribe src/analysis/KeyModelWeights.h.
 
-Uso: tools/train_key_model.py features.json [--lam 0.1] [--out src/analysis/KeyModelWeights.h]
+Uso: tools/train_key_model.py features.json[.gz] [--lam 0.1] [--out src/analysis/KeyModelWeights.h]
 Necesita numpy y scipy.
 """
-import argparse, collections, json
+import argparse, collections, gzip, json
 import numpy as np
 from scipy.optimize import minimize
 
@@ -29,13 +29,24 @@ def pear(x, y):
 def label(r): return r['label'][0] * 2 + (0 if r['label'][1] == 'major' else 1)
 
 
+def votes(r):
+    """Fracción de ventanas de 8 s cuya mejor tonalidad (Temperley) es cada una de las 24."""
+    v = np.zeros(24)
+    for w in r.get('win', []):
+        c = np.array(w[0]) * 12
+        sc = [pear(c, np.roll(prof, t)) for t in range(12) for prof in (TM, Tm)]
+        v[int(np.argmax(sc))] += 1          # empate: la primera, como en C++
+    return v / max(len(r.get('win', [])), 1)
+
+
 def feats(r, use_end):
     c = np.array(r['chroma']) * 12; b = np.array(r['bass']) * 12; e = np.array(r['ending']) * 12
+    vt = votes(r) if use_end else None
     rows = []
     for t in range(12):
-        for prof in (TM, Tm):
+        for k, prof in enumerate((TM, Tm)):
             v = [[pear(c, np.roll(prof, t))], np.roll(b, -t)]
-            if use_end: v.append(np.roll(e, -t))
+            if use_end: v += [np.roll(e, -t), [3.0 * vt[t * 2 + k]]]
             rows.append(np.concatenate(v))
     return np.array(rows)
 
@@ -66,7 +77,7 @@ def main():
     ap.add_argument('features'); ap.add_argument('--lam', type=float, default=0.1)
     ap.add_argument('--out', default='src/analysis/KeyModelWeights.h')
     a = ap.parse_args()
-    D = json.load(open(a.features))
+    D = json.load(gzip.open(a.features, 'rt') if a.features.endswith('.gz') else open(a.features))
     y = np.array([label(r) for r in D]); grp = np.array([r['group'] for r in D])
     size = collections.Counter(grp)
     w = np.array([1.0 / size[g] for g in grp]); w *= len(D) / w.sum() / len(size)
@@ -89,10 +100,12 @@ def main():
 //   w[m][0] x corr_Temperley(chroma, t, m)
 //   + sum_i w[m][1+i]  x bass_rotado[i]
 //   + sum_i w[m][13+i] x ending_rotado[i]   (solo modelo "full")
+//   + w[m][25] x 3 x voto[t,m]               (solo modelo "full"; voto = fracción de ventanas de 8 s
+//                                              cuya mejor tonalidad con Temperley es (t,m))
 // con cromagramas multiplicados por 12 y rotados para que el índice 0 sea la tónica.
 namespace skale::model {
 '''
-    open(a.out, 'w').write(hdr + arr('kFull', out['full'], 'Con final de la pieza: [corr, bajo(12), final(12)]') + '\n' +
+    open(a.out, 'w').write(hdr + arr('kFull', out['full'], 'Con final de la pieza: [corr, bajo(12), final(12), voto]') + '\n' +
                            arr('kLive', out['live'], 'Sin final (tiempo real): [corr, bajo(12)]') + '}  // namespace skale::model\n')
     print('escrito', a.out)
 

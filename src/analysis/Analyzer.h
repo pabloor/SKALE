@@ -17,6 +17,7 @@ struct AnalysisOptions {
     std::size_t maxCandidates = 5;
     double endingSeconds = 4;    // ventana final que se mira para desempatar la tonalidad
     double endingMargin = 1e9;   // el final solo desempata candidatas a menos de este margen
+    double windowSeconds = 8;    // ventanas del voto por ventanas (paso = la mitad)
     bool learnedModel = true;    // modelo de tonalidad aprendido (ignora perfil y pesos de bajo/final); false = clásico
     double bassWeight = 1;       // peso del bajo (tónica y quinta) en la tonalidad; 0 = off
     double chordWeight = 0;      // peso de los acordes detectados (diatónicos y de tónica); 0 = off
@@ -39,6 +40,12 @@ struct TimelineEntry {
     bool diatonic = false;
 };
 
+struct WindowChroma {
+    double start = 0;
+    Chroma12 chroma{};   // suma 1
+    Chroma12 bass{};     // suma 1
+};
+
 struct SongAnalysis {
     bool valid = false;    // false si no había audio utilizable (silencio)
     double durationSeconds = 0;
@@ -47,6 +54,8 @@ struct SongAnalysis {
     Chroma12 chroma{};
     Chroma12 bassChroma{};      // cromagrama del bajo (40-250 Hz), suma 1
     Chroma12 endingChroma{};    // cromagrama de los últimos endingSeconds, suma 1
+    std::vector<WindowChroma> windows;   // ventanas deslizantes de 8 s (hop 4 s), para el modelo por ventanas
+    Chroma12 startChroma{};     // cromagrama de los primeros endingSeconds, suma 1
     std::vector<KeyCandidate> candidates;   // las más probables, la primera es la elegida
     Key key;
     std::string keyName;

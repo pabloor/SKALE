@@ -104,9 +104,15 @@ SongAnalysis analyze(const float* mono, std::size_t n, double sampleRate, const 
     Chroma12 ending{};
     bool hasEnding = false;
     if (options.endingSeconds > 0) {
-        Chroma36 endAcc{};
-        double lastTime = 0;
-        for (const auto& f : frames) if (!f.silent) lastTime = f.time;
+        Chroma36 endAcc{}, startAcc{};
+        double lastTime = 0, firstTime = -1;
+        for (const auto& f : frames) if (!f.silent) { lastTime = f.time; if (firstTime < 0) firstTime = f.time; }
+        for (const auto& f : frames) {
+            if (f.silent || f.time > firstTime + options.endingSeconds) continue;
+            for (std::size_t i = 0; i < 36; ++i) startAcc[i] += f.chroma[i];
+        }
+        out.startChroma = foldChroma(startAcc, tuning);
+        normalize(out.startChroma);
         for (const auto& f : frames) {
             if (f.silent || f.time < lastTime - options.endingSeconds) continue;
             for (std::size_t i = 0; i < 36; ++i) endAcc[i] += f.chroma[i];
@@ -117,8 +123,32 @@ SongAnalysis analyze(const float* mono, std::size_t n, double sampleRate, const 
         hasEnding = options.endingWeight > 0;
     }
 
+    {   // ventanas deslizantes de 8 s con paso de 4 s (solo con sonido suficiente)
+        const double kWin = options.windowSeconds, kHop = options.windowSeconds / 2;
+        const double total = out.durationSeconds;
+        for (double t0 = 0; t0 + std::min(3.0, kWin) <= total; t0 += kHop) {
+            Chroma36 c36{}, b36{};
+            std::size_t n = 0;
+            for (const auto& f : frames) {
+                if (f.silent || f.time < t0 || f.time >= t0 + kWin) continue;
+                for (std::size_t i = 0; i < 36; ++i) { c36[i] += f.chroma[i]; b36[i] += f.bass[i]; }
+                ++n;
+            }
+            if (n < 8) continue;
+            WindowChroma w;
+            w.start = t0;
+            w.chroma = foldChroma(c36, tuning); normalize(w.chroma);
+            w.bass = foldChroma(b36, tuning); normalize(w.bass);
+            out.windows.push_back(w);
+        }
+    }
+
+    std::vector<Chroma12> winChromas;
+    for (const auto& w : out.windows) winChromas.push_back(w.chroma);
+    const std::array<float, 24> votes = KeyDetector::windowVotes(winChromas);
+
     auto candidates = options.learnedModel
-        ? KeyDetector::detectLearned(out.chroma, out.bassChroma, options.endingSeconds > 0 ? &out.endingChroma : nullptr)
+        ? KeyDetector::detectLearned(out.chroma, out.bassChroma, options.endingSeconds > 0 ? &out.endingChroma : nullptr, &votes)
         : KeyDetector::detect(out.chroma, options.profile,
                                           hasEnding ? &ending : nullptr, options.endingWeight,
                                           options.endingMargin, hasExtra ? &extra : nullptr);

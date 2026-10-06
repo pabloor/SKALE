@@ -100,7 +100,8 @@ std::array<float, 24> KeyDetector::bassScores(const Chroma12& bass, double weigh
 }
 
 std::vector<KeyCandidate> KeyDetector::detectLearned(const Chroma12& chroma, const Chroma12& bass,
-                                                     const Chroma12* ending) {
+                                                     const Chroma12* ending,
+                                                     const std::array<float, 24>* votes) {
     double total = 0;
     for (float v : chroma) total += double(v);
     if (total <= 0.0) return {};
@@ -123,6 +124,8 @@ std::vector<KeyCandidate> KeyDetector::detectLearned(const Chroma12& chroma, con
             k += 12;
             if (ending) {
                 for (int i = 0; i < 12; ++i) score += double(w[k + i]) * 12.0 * double((*ending)[std::size_t((tonic + i) % 12)]);
+                k += 12;
+                if (votes) score += double(w[k]) * 3.0 * double((*votes)[std::size_t(tonic * 2 + m)]);
             }
             KeyCandidate c;
             c.key = {tonic, m == 0 ? Mode::Major : Mode::Minor};
@@ -146,6 +149,29 @@ std::vector<KeyCandidate> KeyDetector::detectLearned(const Chroma12& chroma, con
         sorted.push_back(c);
     }
     return sorted;
+}
+
+std::array<float, 24> KeyDetector::windowVotes(const std::vector<Chroma12>& windowChromas) {
+    std::array<float, 24> votes{};
+    if (windowChromas.empty()) return votes;
+    for (const Chroma12& w : windowChromas) {
+        double x[12];
+        for (int i = 0; i < 12; ++i) x[i] = double(w[std::size_t(i)]);
+        double best = -2.0;
+        int bestIdx = 0;
+        for (int tonic = 0; tonic < 12; ++tonic) {
+            for (int m = 0; m < 2; ++m) {
+                const double* prof = m == 0 ? kTempMajor : kTempMinor;
+                double rotated[12];
+                for (int i = 0; i < 12; ++i) rotated[i] = prof[((i - tonic) % 12 + 12) % 12];
+                const double c = pearson(x, rotated);
+                if (c > best) { best = c; bestIdx = tonic * 2 + m; }   // empate: la primera
+            }
+        }
+        votes[std::size_t(bestIdx)] += 1.f;
+    }
+    for (float& v : votes) v /= float(windowChromas.size());
+    return votes;
 }
 
 }  // namespace skale

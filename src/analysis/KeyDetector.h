@@ -41,8 +41,15 @@ public:
     // Modelo aprendido (ver KeyModelWeights.h): ordena las 24 tonalidades con una
     // puntuación lineal sobre la correlación de Temperley, el bajo y (si se da)
     // el final. `confidence` es el softmax de esas puntuaciones (logits).
+    // `ending` y `votes` (fracción de ventanas que votan por cada tonalidad, indexada
+    // tonic * 2 + menor) se dan juntos para el modelo completo; sin `ending` se usa el
+    // modelo "en vivo" (solo correlación y bajo).
     static std::vector<KeyCandidate> detectLearned(const Chroma12& chroma, const Chroma12& bass,
-                                                   const Chroma12* ending);
+                                                   const Chroma12* ending,
+                                                   const std::array<float, 24>* votes = nullptr);
+
+    // Voto por ventanas: cada ventana vota por su mejor tonalidad con Temperley.
+    static std::array<float, 24> windowVotes(const std::vector<Chroma12>& windowChromas);
 
     static std::array<float, 24> bassScores(const Chroma12& bass, double weight);
 };

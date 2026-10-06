@@ -78,17 +78,20 @@ Es decir: **en música real no clásica, Skale acierta alrededor del 50-55 %, ig
 
 ### Modelo de tonalidad aprendido (`--model learned`, **por defecto** al analizar archivos)
 
-Con **GuitarSet** (360 fragmentos de guitarra con la tonalidad anotada por personas, CC BY 4.0, [Zenodo](https://zenodo.org/records/3371780); el audio no está en el repo, solo `tools/samples/guitarset_expected.csv`), los demás conjuntos y 108 progresiones sintéticas (`tools/gen_synth_training.py`) hay 704 archivos etiquetados. `tools/extract_features.py` vuelca las características (`--features` de la CLI, ya volcadas en `tools/samples/features.json`) y `tools/train_key_model.py` aprende, por modo, pesos para `[correlación de Temperley, bajo rotado, final rotado]` (regresión logística condicional sobre las 24 tonalidades, `KeyModelWeights.h`). `--model classic` vuelve al método anterior (con `--profile` y los pesos manuales; el aprendido los ignora).
+Con **GuitarSet** (360 fragmentos de guitarra con la tonalidad anotada por personas, CC BY 4.0, [Zenodo](https://zenodo.org/records/3371780); el audio no está en el repo, solo `tools/samples/guitarset_expected.csv`), los demás conjuntos y 108 progresiones sintéticas (`tools/gen_synth_training.py`) hay 704 archivos etiquetados. `tools/extract_features.py` vuelca las características (`--features` de la CLI, ya volcadas en `tools/samples/features.json`) y `tools/train_key_model.py` aprende, por modo, pesos para `[correlación de Temperley, bajo rotado, final rotado, voto por ventanas]` (regresión logística condicional sobre las 24 tonalidades, `KeyModelWeights.h`). `--model classic` vuelve al método anterior (con `--profile` y los pesos manuales; el aprendido los ignora).
 
-Validación **dejando un conjunto entero fuera** (se entrena con los demás y se mide en él: la cifra honesta). Media por conjunto sobre los 6 conjuntos reales:
+**Voto por ventanas:** el audio se divide en ventanas de 8 s (paso de 4 s) y cada una «vota» por su mejor tonalidad con Temperley; la característica es la fracción de ventanas que votan por cada candidata. Hace al modelo robusto a progresiones que dan peso desigual a unos acordes (ventana de 4 s o 16 s dan resultados parecidos, 8 s el mejor). Otras ideas probadas que no mejoraron o lo hicieron menos: cromagrama de inicio, tiempo en el acorde de tónica, cadencias V→I / IV→I / VII→I, primer y último acorde (+2 puntos pero bajando Jamendo), votos suaves o con el bajo, y correlación media por ventana.
 
-| | Media por conjunto | GuitarSet | Bach | Jamendo (consenso) |
-|---|---|---|---|---|
-| Anterior (`classic`: Temperley + final 0,5 + bajo 1) | 66,0 % | 55 % | 85 % | 78 % |
-| **Aprendido, con final (por defecto)** | **70,8 %** | **56 %** | 94 % | 79 % |
-| Aprendido sin final (modo en directo, no se usa aún) | ≈ 66 % | 57 % | 90 % | 84 % |
+Validación **dejando un conjunto entero fuera** (se entrena con los demás y se mide en él: la cifra honesta). Media por conjunto sobre los 6 conjuntos reales y acierto de **escala** (tónica y modo, o su relativa: mismas notas):
 
-(Sin los sintéticos en el entrenamiento la media era del 73,5 %, pero fallaba 7 de las 24 progresiones sintéticas de los tests —confundía la tonalidad con su relativa o su subdominante cuando el bajo toca todas las raíces por igual—; añadirlos costó ~3 puntos con música real y arregló los tests.) El aprendido mejora en la mayoría de conjuntos y empeora algo en los temas con etiqueta de autor. Con todos los datos en el entrenamiento da 419/596 (70 %), cifra optimista: la de arriba es la que debe esperarse. **En música real tocada por personas (GuitarSet) el acierto es de ≈ 56 %**, no el 78 % que daban las etiquetas por consenso. Los acordes detectados, KS, el sesgo por modo y raíces cuadradas del cromagrama no aportaron nada.
+| | Media (6 reales) | Escala correcta | GuitarSet | Bach | Jamendo (consenso) | Autor |
+|---|---|---|---|---|---|---|
+| Anterior (`classic`: Temperley + final 0,5 + bajo 1) | 66,0 % | – | 55 % | 85 % | 78 % | 56 % |
+| Aprendido sin voto | 70,9 % | 77,2 % | 56 % | 94 % | 79 % | 51 % |
+| **Aprendido con voto por ventanas (por defecto)** | **73,9 %** | **81,8 %** | **60 %** | 92 % | 82 % | 56 % |
+| Aprendido sin final (modo en directo, no se usa aún) | ≈ 66 % | – | 57 % | 90 % | 84 % | 51 % |
+
+Con todos los datos en el entrenamiento da 428/596 (72 %), cifra optimista: la de arriba es la que debe esperarse. **En música real tocada por personas (GuitarSet) el acierto de tonalidad es de ≈ 60 % y el de escala (con relativas) bastante mayor.** Los acordes detectados, KS, el sesgo por modo y raíces cuadradas del cromagrama no aportaron nada. Se entrena también con 108 progresiones sintéticas (arreglan los tests; costaron ~3 puntos en música real).
 
 ## Límites conocidos
 

@@ -7,6 +7,7 @@ Cada CSV tiene líneas "archivo,Tonalidad" (p. ej. "pieza.mp3,Eb minor") relativ
 import csv, json, subprocess, sys
 from concurrent.futures import ThreadPoolExecutor
 
+EXTRA = []
 PC = {'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11}
 
 
@@ -19,8 +20,10 @@ def main():
     args = sys.argv[1:]
     out = args.pop(0)
     cli = 'build/skale-cli'
-    if args and args[0] == '--cli':
-        cli = args[1]; args = args[2:]
+    while args and args[0].startswith('--'):
+        if args[0] == '--cli': cli = args[1]
+        else: EXTRA.extend([args[0], args[1]])   # p. ej. --window 4
+        args = args[2:]
     items = []
     for g, folder, csvname in zip(args[0::3], args[1::3], args[2::3]):
         for fn, k in csv.reader(open(csvname)):
@@ -28,7 +31,7 @@ def main():
 
     def run(it):
         g, f, k, fn = it
-        o = subprocess.run([cli, f, '--features'], capture_output=True, text=True)
+        o = subprocess.run([cli, f, '--features'] + EXTRA, capture_output=True, text=True)
         try:
             return dict(group=g, name=fn, label=k, **json.loads(o.stdout))
         except Exception:
