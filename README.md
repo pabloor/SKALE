@@ -57,7 +57,14 @@ Comprobación en otros dos conjuntos, descargados de archive.org con licencia li
 | Sonatas de Beethoven, Chopin (12, dominio público) | 7/12 | 9/12 | 6/12 | 8/12 |
 | Rock, blues, funk, folk, electrónica y otros (14, Creative Commons) | 5/14 | 6/14 | 4/14 | 4/14 |
 
-En el segundo, la tonalidad es la que dice el título del autor y no está verificada; en las sonatas completas, los movimientos centrales pueden estar en otra tonalidad. Con la misma configuración (Temperley, 4 s, 0,5) el peso del final mejora en los cuatro conjuntos, pero con pocos archivos y poco margen en los no clásicos. Mejora todos los pesos probados con Temperley (+1 a +5 preludios), pero el máximo (8 s, 0,5) es un pico y está ajustado sobre estos mismos datos. Sigue **desactivado por defecto** (peso 0): las canciones con fundido final (fade-out) o que acaban fuera de la tónica pueden empeorar, y falta comprobarlo con pop y rock. Es música clásica con modulaciones, así que no es representativa de pop o rock.
+En el segundo, la tonalidad es la que dice el título del autor y no está verificada; en las sonatas completas, los movimientos centrales pueden estar en otra tonalidad. Otros dos conjuntos más cercanos a música real:
+
+| Conjunto | Temperley sin final | Temperley, 4 s, 0,5 | KS sin final | KS, 4 s, 0,5 |
+|---|---|---|---|---|
+| 29 melodías folk del corpus de music21 (dominio público), sintetizadas con soundfont, sin acompañamiento (`tools/render_corpus.py`) | 15/29 | 16/29 | 11/29 | 15/29 |
+| 26 temas de Jamendo (CC; rock, pop, punk, ska, electrónica…), etiquetados solo si coinciden Essentia (EDMA y BGate) y librosa (`tools/label_consensus.py`) | 16/26 | 18/26 | 20/26 | 19/26 |
+
+Aquí **KS supera a Temperley** en música real (77 % frente a 62 % en Jamendo) y el peso del final ya no le ayuda. Aviso de circularidad: una de las tres etiquetas de consenso es una variante de KS (librosa), lo que favorece a KS; las etiquetas son estimadas, no verificadas por una persona. Las melodías sintéticas no tienen acompañamiento, así que el relativo menor es casi indistinguible (8 de los 14 fallos de Temperley). Con la misma configuración (Temperley, 4 s, 0,5) el peso del final mejora en los cuatro conjuntos, pero con pocos archivos y poco margen en los no clásicos. Mejora todos los pesos probados con Temperley (+1 a +5 preludios), pero el máximo (8 s, 0,5) es un pico y está ajustado sobre estos mismos datos. Sigue **desactivado por defecto** (peso 0): las canciones con fundido final (fade-out) o que acaban fuera de la tónica pueden empeorar, y falta comprobarlo con pop y rock. Es música clásica con modulaciones, así que no es representativa de pop o rock.
 
 ## Hoja de ruta
 
