@@ -2,7 +2,7 @@
 
 Detecta la **escala de una canción**: tonalidad, notas de la escala, acordes diatónicos y los acordes que suenan. Objetivo final: un plugin de audio VST3/AU que funcione en tiempo real y con archivos mp3/wav.
 
-Estado: **fase 1** (núcleo del analizador + herramienta de línea de comandos). El plugin llega en la fase 2.
+Estado: **fase 2** (núcleo del analizador, herramienta de línea de comandos y plugin VST3 / aplicación independiente en tiempo real).
 
 ## Cómo funciona
 
@@ -20,6 +20,21 @@ El extractor funciona en streaming (acepta bloques de cualquier tamaño), pensad
     ctest --test-dir build --output-on-failure
 
 Solo hace falta un compilador C++17 y CMake. `third_party/dr_libs` (dr_wav, dr_mp3) lee wav y mp3.
+
+## Plugin (VST3 y aplicación independiente)
+
+    cmake -S . -B build-plugin -DSKALE_BUILD_PLUGIN=ON
+    cmake --build build-plugin -j --target SkalePlugin_VST3 SkalePlugin_Standalone
+
+JUCE (8.0.15) se descarga al configurar; no está en el repo. En Linux hacen falta ALSA, FreeType, Fontconfig y las cabeceras de X11, GL y GTK/WebKit (`libasound2-dev libfreetype-dev libfontconfig1-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxext-dev libgl1-mesa-dev`). El audio pasa sin tocarse: el hilo de audio solo copia muestras a un buffer circular sin bloqueos; otro hilo ejecuta `KeyTracker` (`src/analysis/KeyTracker.*`, sin dependencias de JUCE) con memoria de ~30 s y publica tonalidad, confianza, escala y acorde actual 5 veces por segundo.
+
+![Vista del plugin](docs/plugin.png)
+
+Prueba sin anfitrión ni tarjeta de sonido (pasa un wav por `processBlock` en bloques de 512 y guarda una captura): `SkalePluginSelfTest audio.wav captura.png` (se construye con `--target SkalePluginSelfTest`). En los cuatro preludios probados el plugin da la misma tonalidad que el analizador de archivos sobre esos mismos 60 s.
+
+**Licencia de JUCE:** JUCE se ofrece bajo AGPLv3 o con licencia comercial. Skale es propietario, así que **para distribuir el plugin hace falta la licencia comercial de JUCE** (compilarlo para uso propio no lo requiere). Alternativa sin JUCE: el SDK de VST3 (MIT) o CLAP, con una interfaz propia.
+
+Limitaciones de esta primera versión: no hay estado guardado, ni ajuste de la memoria ni de perfil en la interfaz, y el bonus del acorde final no se aplica (en tiempo real no hay final). El plugin no se ha probado en un anfitrión real (DAW) ni con `pluginval`.
 
 ## Línea de comandos
 
@@ -90,7 +105,7 @@ Con la misma configuración (Temperley, 4 s, 0,5) el peso del final mejora en lo
 ## Hoja de ruta
 
 1. Núcleo del analizador y CLI ✅
-2. Plugin JUCE (VST3/AU) con tiempo real y vista mínima
+2. Plugin JUCE (VST3 y aplicación independiente) con tiempo real y vista mínima ✅ (AU pendiente: solo macOS)
 3. Análisis de archivos arrastrados al plugin
 4. Línea de tiempo de acordes en la interfaz
 5. Pulido de UI y empaquetado
