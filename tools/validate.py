@@ -41,6 +41,7 @@ def main():
     ap.add_argument('--profile', default='temperley')
     ap.add_argument('--ending-weight', default='0')
     ap.add_argument('--ending-seconds', default='4')
+    ap.add_argument('--ending-margin', default='1e9')
     ap.add_argument('--quiet', action='store_true', help='solo la línea de resumen')
     a = ap.parse_args()
     folder = Path(a.folder)
@@ -48,7 +49,8 @@ def main():
     stats, total = {}, 0
     for fn, key in rows:
         out = subprocess.run([a.cli, str(folder / fn), '--json', '--profile', a.profile,
-                              '--ending-weight', a.ending_weight, '--ending-seconds', a.ending_seconds],
+                              '--ending-weight', a.ending_weight, '--ending-seconds', a.ending_seconds,
+                              '--ending-margin', a.ending_margin],
                              capture_output=True, text=True)
         if out.returncode:
             print(f'{fn}: ERROR {out.stderr.strip()}')

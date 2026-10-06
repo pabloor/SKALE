@@ -24,10 +24,13 @@ public:
     // Si se da y `endingWeight` > 0, se suma a la correlación de cada
     // tonalidad `endingWeight` x energía de su tríada tónica en el final: las
     // piezas suelen acabar en la tónica, lo que desempata mayor/relativo menor.
+    // `endingMargin`: el bonus solo se da a las tonalidades cuya correlación
+    // base está a menos de este margen de la mejor (el final solo desempata).
     static std::vector<KeyCandidate> detect(const Chroma12& chroma,
                                             KeyProfile profile = KeyProfile::Temperley,
                                             const Chroma12* ending = nullptr,
-                                            double endingWeight = 0);
+                                            double endingWeight = 0,
+                                            double endingMargin = 1e9);
 };
 
 }  // namespace skale

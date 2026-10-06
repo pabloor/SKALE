@@ -61,7 +61,8 @@ SongAnalysis analyze(const float* mono, std::size_t n, double sampleRate, const 
     }
 
     auto candidates = KeyDetector::detect(out.chroma, options.profile,
-                                          hasEnding ? &ending : nullptr, options.endingWeight);
+                                          hasEnding ? &ending : nullptr, options.endingWeight,
+                                          options.endingMargin);
     if (candidates.empty()) return out;
     if (candidates.size() > options.maxCandidates) candidates.resize(options.maxCandidates);
     out.candidates = candidates;
