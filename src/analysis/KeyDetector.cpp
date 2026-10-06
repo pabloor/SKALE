@@ -33,7 +33,8 @@ double pearson(const double* x, const double* y) {
 
 std::vector<KeyCandidate> KeyDetector::detect(const Chroma12& chroma, KeyProfile profile,
                                               const Chroma12* ending, double endingWeight,
-                                              double endingMargin) {
+                                              double endingMargin,
+                                              const std::array<float, 24>* extra) {
     double total = 0;
     for (float v : chroma) total += double(v);
     if (total <= 0.0) return {};
@@ -55,6 +56,10 @@ std::vector<KeyCandidate> KeyDetector::detect(const Chroma12& chroma, KeyProfile
             c.correlation = float(pearson(x, rotated));
             out.push_back(c);
         }
+    }
+
+    if (extra) {
+        for (auto& c : out) c.correlation += (*extra)[std::size_t(c.key.tonic * 2 + (c.key.mode == Mode::Minor ? 1 : 0))];
     }
 
     if (ending && endingWeight > 0) {

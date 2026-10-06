@@ -42,6 +42,8 @@ def main():
     ap.add_argument('--ending-weight', default=None, help='por defecto el de la CLI')
     ap.add_argument('--ending-seconds', default=None)
     ap.add_argument('--ending-margin', default=None)
+    ap.add_argument('--bass-weight', default=None)
+    ap.add_argument('--chord-weight', default=None)
     ap.add_argument('--quiet', action='store_true', help='solo la línea de resumen')
     a = ap.parse_args()
     folder = Path(a.folder)
@@ -49,7 +51,8 @@ def main():
     stats, total = {}, 0
     for fn, key in rows:
         extra = [x for opt, v in (('--ending-weight', a.ending_weight), ('--ending-seconds', a.ending_seconds),
-                                  ('--ending-margin', a.ending_margin)) if v is not None for x in (opt, v)]
+                                  ('--ending-margin', a.ending_margin),
+                                  ('--bass-weight', a.bass_weight), ('--chord-weight', a.chord_weight)) if v is not None for x in (opt, v)]
         out = subprocess.run([a.cli, str(folder / fn), '--json', '--profile', a.profile, *extra],
                              capture_output=True, text=True)
         if out.returncode:

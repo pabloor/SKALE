@@ -16,6 +16,8 @@ void usage() {
                  "  --solfege         Do Re Mi en lugar de C D E\n"
                  "  --profile <ks|temperley>   perfil de tonalidad (por defecto temperley)\n"
                  "  --ending-weight <w>        peso del acorde final en la tonalidad (0 = off, por defecto 0.5)\n"
+                 "  --bass-weight <w>          peso del bajo en la tonalidad (0 = off, por defecto)\n"
+                 "  --chord-weight <w>         peso de los acordes detectados en la tonalidad (0 = off, por defecto)\n"
                  "  --ending-margin <m>        el final solo desempata tonalidades a <m de la mejor (por defecto sin límite)\n"
                  "  --ending-seconds <s>       segundos finales que se miran (por defecto 4)\n");
 }
@@ -130,6 +132,10 @@ int main(int argc, char** argv) {
             else { usage(); return 2; }
         } else if (!std::strcmp(arg, "--ending-weight") && i + 1 < argc) {
             options.endingWeight = std::atof(argv[++i]);
+        } else if (!std::strcmp(arg, "--bass-weight") && i + 1 < argc) {
+            options.bassWeight = std::atof(argv[++i]);
+        } else if (!std::strcmp(arg, "--chord-weight") && i + 1 < argc) {
+            options.chordWeight = std::atof(argv[++i]);
         } else if (!std::strcmp(arg, "--ending-margin") && i + 1 < argc) {
             options.endingMargin = std::atof(argv[++i]);
         } else if (!std::strcmp(arg, "--ending-seconds") && i + 1 < argc) {

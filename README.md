@@ -29,6 +29,23 @@ Solo hace falta un compilador C++17 y CMake. `third_party/dr_libs` (dr_wav, dr_m
 
 Opciones: `--json`, `--timeline` (línea de tiempo de acordes), `--solfege` (Do Re Mi), `--profile ks|temperley`.
 
+### Bajo y acordes en la tonalidad (opcionales, desactivados)
+
+- `--bass-weight <w>`: suma `w × (energía del bajo en la tónica + 0,5 × en la quinta)`, con un cromagrama aparte de 40–250 Hz.
+- `--chord-weight <w>`: suma `w × (fracción de tiempo con acordes diatónicos + fracción con el acorde de tónica)` según los acordes detectados.
+
+Barrido en 207 archivos (Temperley, con el final a 0,5 como base). Aciertos en música real de Jamendo (104) / total (207):
+
+| Configuración | Jamendo (104) | Total (207) |
+|---|---|---|
+| Base (solo final) | 74 | 144 |
+| + bajo 0,3 / 0,6 / 1 | 77 / 80 / **81** | 147 / 153 / 154 |
+| + acordes 0,3 / 0,6 / 1 | 70 / 69 / 69 | 144 / 144 / 144 |
+| + bajo 0,6 y acordes 0,6 | 78 | **156** |
+| KS + acordes 0,6 | 82 | 154 |
+
+El bajo mejora de forma monótona en pop/rock (74 → 81) y también en las fugas (18 → 20). Los acordes mejoran mucho la clásica (preludios 24/24, fugas hasta 22/24) pero **empeoran con Temperley en pop** (74 → 69); con KS suben a 82, pero las etiquetas de Jamendo incluyen un voto de una variante de KS, así que esa cifra está favorecida. Sin activar por defecto: configuración recomendada para pop/rock `--bass-weight 1`; para clásica `--chord-weight 0.6`.
+
 ## Límites conocidos
 
 - Mayor y su relativo menor son ambiguos si la música no define el modo (Am F C G tiene las mismas notas que C mayor): por eso se devuelven candidatos con su confianza.

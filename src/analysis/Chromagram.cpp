@@ -9,6 +9,8 @@ namespace {
 
 constexpr double kMinFreq = 65.0;
 constexpr double kMaxFreq = 2100.0;
+constexpr double kBassMinFreq = 40.0;
+constexpr double kBassMaxFreq = 250.0;
 constexpr float kSilenceRms = 5e-4f;
 constexpr float kPeakFloor = 0.03f;  // pico mínimo respecto al mayor (-30 dB)
 
@@ -64,6 +66,7 @@ std::vector<ChromaFrame> ChromaExtractor::process(const float* mono, std::size_t
 
 void ChromaExtractor::analyseFrame(const float* x, ChromaFrame& out) {
     out.chroma.fill(0.f);
+    out.bass.fill(0.f);
     out.silent = true;
 
     double energy = 0;
@@ -112,6 +115,38 @@ void ChromaExtractor::analyseFrame(const float* x, ChromaFrame& out) {
     if (total <= 0.0) return;
     for (float& v : out.chroma) v = float(double(v) / total);
     out.silent = false;
+
+    // Cromagrama del bajo: mismos picos y mismo reparto en 36 bins, solo 40-250 Hz.
+    const std::size_t bLo = std::max<std::size_t>(2, std::size_t(std::ceil(kBassMinFreq / binHz)));
+    const std::size_t bHi = std::min<std::size_t>(std::size_t(kBassMaxFreq / binHz), fftSize_ / 2 - 2);
+    float bassMax = 0.f;
+    for (std::size_t i = bLo; i <= bHi; ++i) bassMax = std::max(bassMax, std::abs(buf_[i]));
+    if (bassMax <= 0.f) return;
+    const float bassFloor = bassMax * 0.1f;
+    double bassTotal = 0;
+    for (std::size_t i = bLo; i <= bHi; ++i) {
+        const float m = std::abs(buf_[i]);
+        const float mPrev = std::abs(buf_[i - 1]);
+        const float mNext = std::abs(buf_[i + 1]);
+        if (m < bassFloor || m <= mPrev || m < mNext) continue;
+        const double a = std::log(double(mPrev) + 1e-12);
+        const double b = std::log(double(m) + 1e-12);
+        const double c = std::log(double(mNext) + 1e-12);
+        const double denom = a - 2.0 * b + c;
+        double shift = denom != 0.0 ? 0.5 * (a - c) / denom : 0.0;
+        shift = std::clamp(shift, -0.5, 0.5);
+        const double freq = (double(i) + shift) * binHz;
+        double pos = 36.0 * std::log2(freq / 440.0) + 27.0;
+        pos = std::fmod(pos, 36.0);
+        if (pos < 0) pos += 36.0;
+        const int lo = int(std::floor(pos));
+        const float frac = float(pos - double(lo));
+        const float w = std::sqrt(m);
+        out.bass[std::size_t(lo % 36)] += w * (1.f - frac);
+        out.bass[std::size_t((lo + 1) % 36)] += w * frac;
+        bassTotal += double(w);
+    }
+    if (bassTotal > 0.0) for (float& v : out.bass) v = float(double(v) / bassTotal);
 }
 
 int estimateTuning(const Chroma36& c) {

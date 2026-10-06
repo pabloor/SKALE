@@ -1,6 +1,7 @@
 #include "analysis/Analyzer.h"
 
 #include <algorithm>
+#include <array>
 #include <map>
 
 namespace skale {
@@ -31,10 +32,11 @@ SongAnalysis analyze(const float* mono, std::size_t n, double sampleRate, const 
     const std::vector<ChromaFrame> frames = extractor.process(mono, n);
 
     Chroma36 acc{};
+    Chroma36 bassAcc{};
     std::size_t active = 0;
     for (const auto& f : frames) {
         if (f.silent) continue;
-        for (std::size_t i = 0; i < 36; ++i) acc[i] += f.chroma[i];
+        for (std::size_t i = 0; i < 36; ++i) { acc[i] += f.chroma[i]; bassAcc[i] += f.bass[i]; }
         ++active;
     }
     if (active == 0) return out;
@@ -43,6 +45,62 @@ SongAnalysis analyze(const float* mono, std::size_t n, double sampleRate, const 
     out.tuningCents = tuningToCents(tuning);
     out.chroma = foldChroma(acc, tuning);
     normalize(out.chroma);
+
+    std::vector<ChordFrame> chordFrames;
+    chordFrames.reserve(frames.size());
+    for (const auto& f : frames) {
+        ChordFrame cf;
+        cf.time = f.time;
+        cf.silent = f.silent;
+        if (!f.silent) {
+            cf.chroma = foldChroma(f.chroma, tuning);
+            normalize(cf.chroma);
+        }
+        chordFrames.push_back(cf);
+    }
+
+    const ChordDetector detector;
+    const auto segments = detector.detect(chordFrames, extractor.hopSeconds());
+
+    // Puntuaciones extra por tonalidad: bajo y acordes.
+    std::array<float, 24> extra{};
+    bool hasExtra = false;
+    if (options.bassWeight > 0) {
+        Chroma12 bass = foldChroma(bassAcc, tuning);
+        normalize(bass);
+        for (int t = 0; t < 12; ++t) {
+            for (int m = 0; m < 2; ++m) {
+                extra[std::size_t(t * 2 + m)] += float(options.bassWeight * (double(bass[std::size_t(t)]) + 0.5 * double(bass[std::size_t((t + 7) % 12)])));
+            }
+        }
+        hasExtra = true;
+    }
+    if (options.chordWeight > 0) {
+        double chordTime = 0;
+        for (const auto& seg : segments) if (!seg.chord.none) chordTime += std::max(0.0, seg.end - seg.start);
+        if (chordTime > 0) {
+            static const int kMajor[7] = {0, 2, 4, 5, 7, 9, 11};
+            static const int kMinor[8] = {0, 2, 3, 5, 7, 8, 10, 11};  // menor armónica
+            for (int t = 0; t < 12; ++t) {
+                for (int m = 0; m < 2; ++m) {
+                    bool inKey[12] = {};
+                    if (m == 0) for (int d : kMajor) inKey[(t + d) % 12] = true;
+                    else for (int d : kMinor) inKey[(t + d) % 12] = true;
+                    double diatonic = 0, tonic = 0;
+                    for (const auto& seg : segments) {
+                        if (seg.chord.none) continue;
+                        const double dur = std::max(0.0, seg.end - seg.start);
+                        bool ok = true;
+                        for (int pc : chordPitchClasses(seg.chord.root, seg.chord.type)) if (!inKey[pc]) { ok = false; break; }
+                        if (ok) diatonic += dur;
+                        if (seg.chord.root == t && seg.chord.type == (m == 0 ? ChordType::Major : ChordType::Minor)) tonic += dur;
+                    }
+                    extra[std::size_t(t * 2 + m)] += float(options.chordWeight * (diatonic + tonic) / chordTime);
+                }
+            }
+            hasExtra = true;
+        }
+    }
 
     // Cromagrama de los últimos segundos con sonido (el final de la pieza).
     Chroma12 ending{};
@@ -62,7 +120,7 @@ SongAnalysis analyze(const float* mono, std::size_t n, double sampleRate, const 
 
     auto candidates = KeyDetector::detect(out.chroma, options.profile,
                                           hasEnding ? &ending : nullptr, options.endingWeight,
-                                          options.endingMargin);
+                                          options.endingMargin, hasExtra ? &extra : nullptr);
     if (candidates.empty()) return out;
     if (candidates.size() > options.maxCandidates) candidates.resize(options.maxCandidates);
     out.candidates = candidates;
@@ -72,22 +130,6 @@ SongAnalysis analyze(const float* mono, std::size_t n, double sampleRate, const 
     const Speller speller(out.key);
     for (const Note& n2 : speller.scale()) out.scaleNotes.push_back(formatNote(n2, options.solfege));
     out.diatonic = diatonicChords(out.key, options.solfege);
-
-    std::vector<ChordFrame> chordFrames;
-    chordFrames.reserve(frames.size());
-    for (const auto& f : frames) {
-        ChordFrame cf;
-        cf.time = f.time;
-        cf.silent = f.silent;
-        if (!f.silent) {
-            cf.chroma = foldChroma(f.chroma, tuning);
-            normalize(cf.chroma);
-        }
-        chordFrames.push_back(cf);
-    }
-
-    const ChordDetector detector;
-    const auto segments = detector.detect(chordFrames, extractor.hopSeconds());
 
     std::map<std::pair<int, int>, ChordUsage> usage;  // (tipo, raíz)
     double chordTime = 0;

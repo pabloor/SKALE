@@ -17,6 +17,8 @@ struct AnalysisOptions {
     std::size_t maxCandidates = 5;
     double endingSeconds = 4;    // ventana final que se mira para desempatar la tonalidad
     double endingMargin = 1e9;   // el final solo desempata candidatas a menos de este margen
+    double bassWeight = 0;       // peso del bajo (tónica y quinta) en la tonalidad; 0 = off
+    double chordWeight = 0;      // peso de los acordes detectados (diatónicos y de tónica); 0 = off
     double endingWeight = 0.5;   // 0 = no usar el final (ver KeyDetector::detect)
 };
 
