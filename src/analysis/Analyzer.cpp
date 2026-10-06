@@ -28,7 +28,7 @@ SongAnalysis analyze(const float* mono, std::size_t n, double sampleRate, const 
     out.durationSeconds = sampleRate > 0 ? double(n) / sampleRate : 0;
     if (n == 0 || sampleRate <= 0) return out;
 
-    ChromaExtractor extractor(sampleRate);
+    ChromaExtractor extractor(sampleRate, options.chroma);
     const std::vector<ChromaFrame> frames = extractor.process(mono, n);
 
     Chroma36 acc{};

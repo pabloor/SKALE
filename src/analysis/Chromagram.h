@@ -21,11 +21,18 @@ struct ChromaFrame {
     bool silent = true;
 };
 
+struct ChromaParams {
+    double minFreq = 65.0;      // rango de picos espectrales usado para el cromagrama
+    double maxFreq = 2100.0;
+    double gamma = 0.5;         // compresión de amplitud: peso = magnitud^gamma
+    double peakFloor = 0.03;    // pico mínimo respecto al mayor del fotograma
+};
+
 // Extrae un cromagrama fino de audio mono en streaming: se puede alimentar en
 // bloques de cualquier tamaño y devuelve los fotogramas que se van completando.
 class ChromaExtractor {
 public:
-    explicit ChromaExtractor(double sampleRate);
+    explicit ChromaExtractor(double sampleRate, ChromaParams params = {});
 
     std::vector<ChromaFrame> process(const float* mono, std::size_t n);
     void reset();
@@ -37,6 +44,7 @@ private:
     void analyseFrame(const float* x, ChromaFrame& out);
 
     double sampleRate_;
+    ChromaParams params_;
     std::size_t fftSize_;
     std::size_t hop_;
     std::size_t minBin_;

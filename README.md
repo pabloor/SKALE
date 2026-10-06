@@ -78,20 +78,28 @@ Es decir: **en música real no clásica, Skale acierta alrededor del 50-55 %, ig
 
 ### Modelo de tonalidad aprendido (`--model learned`, **por defecto** al analizar archivos)
 
-Con **GuitarSet** (360 fragmentos de guitarra con la tonalidad anotada por personas, CC BY 4.0, [Zenodo](https://zenodo.org/records/3371780); el audio no está en el repo, solo `tools/samples/guitarset_expected.csv`), los demás conjuntos y 108 progresiones sintéticas (`tools/gen_synth_training.py`) hay 704 archivos etiquetados. `tools/extract_features.py` vuelca las características (`--features` de la CLI, ya volcadas en `tools/samples/features.json`) y `tools/train_key_model.py` aprende, por modo, pesos para `[correlación de Temperley, bajo rotado, final rotado, voto por ventanas]` (regresión logística condicional sobre las 24 tonalidades, `KeyModelWeights.h`). `--model classic` vuelve al método anterior (con `--profile` y los pesos manuales; el aprendido los ignora).
+Con **GuitarSet** (360 fragmentos de guitarra con la tonalidad anotada por personas, CC BY 4.0, [Zenodo](https://zenodo.org/records/3371780); el audio no está en el repo, solo `tools/samples/guitarset_expected.csv`), los demás conjuntos y 108 progresiones sintéticas (`tools/gen_synth_training.py`) hay 2.062 archivos etiquetados (ver «Datos de electrónica» más abajo). `tools/extract_features.py` vuelca las características (`--features` de la CLI, ya volcadas en `tools/samples/features.json`) y `tools/train_key_model.py` aprende, por modo, pesos para `[correlación de Temperley, bajo rotado, final rotado, voto por ventanas]` (regresión logística condicional sobre las 24 tonalidades, `KeyModelWeights.h`). `--model classic` vuelve al método anterior (con `--profile` y los pesos manuales; el aprendido los ignora).
 
-**Voto por ventanas:** el audio se divide en ventanas de 8 s (paso de 4 s) y cada una «vota» por su mejor tonalidad con Temperley; la característica es la fracción de ventanas que votan por cada candidata. Hace al modelo robusto a progresiones que dan peso desigual a unos acordes (ventana de 4 s o 16 s dan resultados parecidos, 8 s el mejor). Otras ideas probadas que no mejoraron o lo hicieron menos: cromagrama de inicio, tiempo en el acorde de tónica, cadencias V→I / IV→I / VII→I, primer y último acorde (+2 puntos pero bajando Jamendo), votos suaves o con el bajo, y correlación media por ventana.
+**Voto por ventanas:** el audio se divide en ventanas de 8 s (paso de 4 s) y cada una «vota» por su mejor tonalidad con Temperley; la característica es la fracción de ventanas que votan por cada candidata (ventanas de 4 s o 16 s dan resultados parecidos, 8 s el mejor). Aportó +3 puntos de media validada fuera de conjunto.
 
-Validación **dejando un conjunto entero fuera** (se entrena con los demás y se mide en él: la cifra honesta). Media por conjunto sobre los 6 conjuntos reales y acierto de **escala** (tónica y modo, o su relativa: mismas notas):
+**Datos de electrónica:** [GiantSteps+](https://zenodo.org/records/4153506) (600 fragmentos de 2 min con tonalidad anotada por expertos, CC BY-SA 4.0; usamos los 259 de confianza alta y una sola tonalidad con modo claro) y [Beatport EDM Key](https://zenodo.org/records/1101082) (1.486 fragmentos, CC BY-SA 4.0; usamos 1.100: confianza alta y sin cambios de tonalidad en el fragmento; géneros: trance, house, breaks, downtempo, hip hop/R&B…). Etiquetas «aeolian» cuentan como menor y «ionian» como mayor; dorian, frigio, lidio, mixolidio y locrio se descartan. El audio no está en el repo: solo las listas (`tools/samples/giantsteps_plus_conf2_expected.csv`, `beatport_edm_clean_expected.csv`).
 
-| | Media (6 reales) | Escala correcta | GuitarSet | Bach | Jamendo (consenso) | Autor |
-|---|---|---|---|---|---|---|
-| Anterior (`classic`: Temperley + final 0,5 + bajo 1) | 66,0 % | – | 55 % | 85 % | 78 % | 56 % |
-| Aprendido sin voto | 70,9 % | 77,2 % | 56 % | 94 % | 79 % | 51 % |
-| **Aprendido con voto por ventanas (por defecto)** | **73,9 %** | **81,8 %** | **60 %** | 92 % | 82 % | 56 % |
-| Aprendido sin final (modo en directo, no se usa aún) | ≈ 66 % | – | 57 % | 90 % | 84 % | 51 % |
+Validación **dejando un conjunto entero fuera** (se entrena con los demás y se mide en él: la cifra honesta), acierto de tonalidad:
 
-Con todos los datos en el entrenamiento da 428/596 (72 %), cifra optimista: la de arriba es la que debe esperarse. **En música real tocada por personas (GuitarSet) el acierto de tonalidad es de ≈ 60 % y el de escala (con relativas) bastante mayor.** Los acordes detectados, KS, el sesgo por modo y raíces cuadradas del cromagrama no aportaron nada. Se entrena también con 108 progresiones sintéticas (arreglan los tests; costaron ~3 puntos en música real).
+| Conjunto | `classic` (método manual) | Aprendido sin datos EDM | **Aprendido final (por defecto)** |
+|---|---|---|---|
+| GuitarSet (guitarra, 360) | 55 % | 60 % | 58 % |
+| Bach (48) | 85 % | 92 % | 92 % |
+| Clásica libre (12) | 67 % | 92 % | 92 % |
+| Etiquetas de autor (43) | 56 % | 56 % | 56 % |
+| Melodías folk sintetizadas (29) | 55 % | 62 % | 62 % |
+| Jamendo, consenso (104) | 78 % | 82 % | 83 % |
+| **GiantSteps+ EDM (259)** | 47 % | 64 % (fuera de dominio) | **71 %** |
+| **Beatport EDM (1.100)** | 34 % | 41 % (fuera de dominio) | **49 %** |
+
+En las columnas «sin datos EDM» GiantSteps+ y Beatport no estaban en el entrenamiento. Acierto de **escala** (tónica y modo, o su relativa) sobre estos mismos conjuntos: ~78 % de media. Con todos los datos en el entrenamiento el acierto es mayor, pero esa cifra es optimista: la de arriba es la que debe esperarse. Para referencia, en la literatura los sistemas de tonalidad sobre GiantSteps rondan el 60–75 %.
+
+**Probado sin mejora** (con validación fuera de conjunto): ajustes del cromagrama (compresión de amplitud γ 0,3–1,0, rango de frecuencias 65–1200/2100/4000 Hz, mínimo 100 Hz, umbral de picos 0,01–0,1: todos entre 73,9 % y 76,0 % frente al 75,2 % base, o sea ruido), cromagrama de inicio, tiempo en el acorde de tónica, cadencias V→I / IV→I / VII→I, primer y último acorde (±1 punto), votos suaves o con el bajo, correlación media por ventana, y árboles con refuerzo de gradiente (68,6–69,2 % frente a 70,3 % del lineal). El modelo lineal parece cerca del techo de estas características; el límite es ahora la ambigüedad de las propias etiquetas (modos, tonalidades que cambian) y la cantidad de datos verificados en cada género.
 
 ## Límites conocidos
 

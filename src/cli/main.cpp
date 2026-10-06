@@ -139,6 +139,14 @@ int main(int argc, char** argv) {
             if (!std::strcmp(mname, "learned")) options.learnedModel = true;
             else if (!std::strcmp(mname, "classic")) options.learnedModel = false;
             else { usage(); return 2; }
+        } else if (!std::strcmp(arg, "--chroma-gamma") && i + 1 < argc) {
+            options.chroma.gamma = std::atof(argv[++i]);
+        } else if (!std::strcmp(arg, "--chroma-min") && i + 1 < argc) {
+            options.chroma.minFreq = std::atof(argv[++i]);
+        } else if (!std::strcmp(arg, "--chroma-max") && i + 1 < argc) {
+            options.chroma.maxFreq = std::atof(argv[++i]);
+        } else if (!std::strcmp(arg, "--peak-floor") && i + 1 < argc) {
+            options.chroma.peakFloor = std::atof(argv[++i]);
         } else if (!std::strcmp(arg, "--window") && i + 1 < argc) {
             options.windowSeconds = std::atof(argv[++i]);
         } else if (!std::strcmp(arg, "--features")) {

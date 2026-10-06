@@ -7,12 +7,9 @@ namespace skale {
 
 namespace {
 
-constexpr double kMinFreq = 65.0;
-constexpr double kMaxFreq = 2100.0;
 constexpr double kBassMinFreq = 40.0;
 constexpr double kBassMaxFreq = 250.0;
 constexpr float kSilenceRms = 5e-4f;
-constexpr float kPeakFloor = 0.03f;  // pico mínimo respecto al mayor (-30 dB)
 
 std::size_t nextPow2(std::size_t v) {
     std::size_t p = 1;
@@ -22,12 +19,13 @@ std::size_t nextPow2(std::size_t v) {
 
 }  // namespace
 
-ChromaExtractor::ChromaExtractor(double sampleRate)
+ChromaExtractor::ChromaExtractor(double sampleRate, ChromaParams params)
     : sampleRate_(sampleRate),
+      params_(params),
       fftSize_(std::clamp<std::size_t>(nextPow2(std::size_t(std::ceil(sampleRate / 3.0))), 4096, 65536)),
       hop_(fftSize_ / 4),
-      minBin_(std::size_t(std::ceil(kMinFreq * double(fftSize_) / sampleRate))),
-      maxBin_(std::min<std::size_t>(std::size_t(kMaxFreq * double(fftSize_) / sampleRate), fftSize_ / 2 - 2)),
+      minBin_(std::size_t(std::ceil(params.minFreq * double(fftSize_) / sampleRate))),
+      maxBin_(std::min<std::size_t>(std::size_t(params.maxFreq * double(fftSize_) / sampleRate), fftSize_ / 2 - 2)),
       fft_(fftSize_),
       window_(fftSize_),
       buf_(fftSize_),
@@ -83,7 +81,7 @@ void ChromaExtractor::analyseFrame(const float* x, ChromaFrame& out) {
     }
     if (frameMax <= 0.f) return;
 
-    const float floor = frameMax * kPeakFloor;
+    const float floor = frameMax * float(params_.peakFloor);
     const double binHz = sampleRate_ / double(fftSize_);
     double total = 0;
 
@@ -106,7 +104,7 @@ void ChromaExtractor::analyseFrame(const float* x, ChromaFrame& out) {
         if (pos < 0) pos += 36.0;
         const int lo = int(std::floor(pos));
         const float frac = float(pos - double(lo));
-        const float w = std::sqrt(m);  // compresión de amplitud
+        const float w = float(std::pow(double(m), params_.gamma));  // compresión de amplitud
         out.chroma[std::size_t(lo % 36)] += w * (1.f - frac);
         out.chroma[std::size_t((lo + 1) % 36)] += w * frac;
         total += double(w);

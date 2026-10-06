@@ -17,6 +17,7 @@ struct AnalysisOptions {
     std::size_t maxCandidates = 5;
     double endingSeconds = 4;    // ventana final que se mira para desempatar la tonalidad
     double endingMargin = 1e9;   // el final solo desempata candidatas a menos de este margen
+    ChromaParams chroma;         // ajustes del cromagrama
     double windowSeconds = 8;    // ventanas del voto por ventanas (paso = la mitad)
     bool learnedModel = true;    // modelo de tonalidad aprendido (ignora perfil y pesos de bajo/final); false = clásico
     double bassWeight = 1;       // peso del bajo (tónica y quinta) en la tonalidad; 0 = off
