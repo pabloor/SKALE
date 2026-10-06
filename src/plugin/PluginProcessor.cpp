@@ -2,6 +2,64 @@
 
 #include "PluginEditor.h"
 
+#include <juce_audio_formats/juce_audio_formats.h>
+
+class FileAnalysisJob : public juce::ThreadPoolJob {
+public:
+    FileAnalysisJob(SkaleProcessor& p, juce::File f, int id)
+        : juce::ThreadPoolJob("Skale file analysis"), proc_(p), file_(std::move(f)), id_(id) {}
+
+    JobStatus runJob() override {
+        FileAnalysisState st;
+        st.fileName = file_.getFileName();
+        juce::AudioFormatManager fm;
+        fm.registerBasicFormats();
+        std::unique_ptr<juce::AudioFormatReader> reader(fm.createReaderFor(file_));
+        if (!reader || reader->lengthInSamples <= 0) {
+            st.status = FileAnalysisState::Status::Error;
+            st.error = "No se pudo leer el archivo (formatos: wav, aiff, flac, ogg, mp3).";
+            return finish(st);
+        }
+
+        // A mono en trozos, para no necesitar el doble de memoria.
+        std::vector<float> mono;
+        mono.reserve(std::size_t(reader->lengthInSamples));
+        juce::AudioBuffer<float> buf(int(std::max<unsigned>(1u, reader->numChannels)), 65536);
+        for (juce::int64 pos = 0; pos < reader->lengthInSamples; pos += 65536) {
+            if (shouldExit() || proc_.fileJobId_.load() != id_) return jobHasFinished;
+            const int n = int(std::min<juce::int64>(65536, reader->lengthInSamples - pos));
+            reader->read(&buf, 0, n, pos, true, true);
+            const int ch = buf.getNumChannels();
+            for (int i = 0; i < n; ++i) {
+                float sum = 0.f;
+                for (int c = 0; c < ch; ++c) sum += buf.getReadPointer(c)[i];
+                mono.push_back(sum / float(ch));
+            }
+        }
+
+        st.result = skale::analyze(mono.data(), mono.size(), reader->sampleRate);
+        if (!st.result.valid) {
+            st.status = FileAnalysisState::Status::Error;
+            st.error = "El archivo no tiene audio utilizable (silencio).";
+        } else {
+            st.status = FileAnalysisState::Status::Done;
+        }
+        return finish(st);
+    }
+
+private:
+    JobStatus finish(FileAnalysisState& st) {
+        if (proc_.fileJobId_.load() != id_) return jobHasFinished;   // ya hay otro archivo en curso
+        std::lock_guard<std::mutex> lock(proc_.fileMutex_);
+        proc_.fileState_ = std::move(st);
+        return jobHasFinished;
+    }
+
+    SkaleProcessor& proc_;
+    juce::File file_;
+    int id_;
+};
+
 SkaleProcessor::SkaleProcessor()
     : juce::AudioProcessor(BusesProperties()
                                .withInput("Input", juce::AudioChannelSet::stereo(), true)
@@ -11,7 +69,11 @@ SkaleProcessor::SkaleProcessor()
     startThread(juce::Thread::Priority::low);
 }
 
-SkaleProcessor::~SkaleProcessor() { stopThread(2000); }
+SkaleProcessor::~SkaleProcessor() {
+    fileJobId_.fetch_add(1);
+    filePool_.removeAllJobs(true, 5000);
+    stopThread(2000);
+}
 
 void SkaleProcessor::prepareToPlay(double sampleRate, int) {
     sampleRate_.store(sampleRate);
@@ -87,6 +149,28 @@ void SkaleProcessor::run() {
 skale::TrackerSnapshot SkaleProcessor::latest() const {
     std::lock_guard<std::mutex> lock(snapMutex_);
     return snapshot_;
+}
+
+void SkaleProcessor::analyzeFile(const juce::File& file) {
+    const int id = fileJobId_.fetch_add(1) + 1;
+    {
+        std::lock_guard<std::mutex> lock(fileMutex_);
+        fileState_ = {};
+        fileState_.status = FileAnalysisState::Status::Working;
+        fileState_.fileName = file.getFileName();
+    }
+    filePool_.addJob(new FileAnalysisJob(*this, file, id), true);
+}
+
+FileAnalysisState SkaleProcessor::fileState() const {
+    std::lock_guard<std::mutex> lock(fileMutex_);
+    return fileState_;
+}
+
+void SkaleProcessor::clearFileAnalysis() {
+    fileJobId_.fetch_add(1);
+    std::lock_guard<std::mutex> lock(fileMutex_);
+    fileState_ = {};
 }
 
 juce::AudioProcessorEditor* SkaleProcessor::createEditor() { return new SkaleEditor(*this); }

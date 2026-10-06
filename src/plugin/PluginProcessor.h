@@ -6,7 +6,16 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include "analysis/Analyzer.h"
 #include "analysis/KeyTracker.h"
+
+struct FileAnalysisState {
+    enum class Status { Idle, Working, Done, Error };
+    Status status = Status::Idle;
+    juce::String fileName;
+    juce::String error;
+    skale::SongAnalysis result;
+};
 
 // El hilo de audio solo copia muestras (mono) a un buffer circular sin bloqueos.
 // Un hilo de análisis lee ese buffer, hace las FFT con KeyTracker y publica una
@@ -39,6 +48,11 @@ public:
     skale::TrackerSnapshot latest() const;
     void resetAnalysis() { resetRequested_.store(true); }
 
+    // Análisis completo de un archivo de audio (en un hilo aparte).
+    void analyzeFile(const juce::File& file);
+    FileAnalysisState fileState() const;
+    void clearFileAnalysis();
+
 private:
     void run() override;
 
@@ -52,4 +66,10 @@ private:
 
     mutable std::mutex snapMutex_;
     skale::TrackerSnapshot snapshot_;
+
+    mutable std::mutex fileMutex_;
+    FileAnalysisState fileState_;
+    std::atomic<int> fileJobId_{0};     // un archivo nuevo invalida el análisis anterior
+    juce::ThreadPool filePool_{1};
+    friend class FileAnalysisJob;
 };

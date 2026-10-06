@@ -72,10 +72,11 @@ if(SKALE_BUILD_PLUGIN)
     src/plugin/PluginProcessor.cpp
     src/plugin/PluginEditor.cpp)
   target_compile_definitions(SkalePlugin PUBLIC
-    JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
+    JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0 JUCE_USE_MP3AUDIOFORMAT=1)
   target_link_libraries(SkalePlugin PRIVATE
     skale_core
     juce::juce_audio_utils
+    juce::juce_audio_formats
     juce::juce_recommended_config_flags)
 
   juce_add_console_app(SkalePluginSelfTest PRODUCT_NAME "SkalePluginSelfTest")
@@ -84,7 +85,7 @@ if(SKALE_BUILD_PLUGIN)
     src/plugin/PluginProcessor.cpp
     src/plugin/PluginEditor.cpp)
   target_compile_definitions(SkalePluginSelfTest PRIVATE
-    JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_STANDALONE_APPLICATION=1)
+    JUCE_WEB_BROWSER=0 JUCE_USE_CURL=0 JUCE_STANDALONE_APPLICATION=1 JUCE_USE_MP3AUDIOFORMAT=1)
   target_link_libraries(SkalePluginSelfTest PRIVATE
     skale_core juce::juce_audio_utils juce::juce_audio_formats juce::juce_recommended_config_flags)
 endif()

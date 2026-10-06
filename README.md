@@ -30,11 +30,15 @@ JUCE (8.0.15) se descarga al configurar; no está en el repo. En Linux hacen fal
 
 ![Vista del plugin](docs/plugin.png)
 
+**Archivos:** arrastra un wav, aiff, flac, ogg o mp3 sobre la ventana (o pulsa «Abrir archivo...») y se analiza entero en un hilo aparte con el mismo análisis que la CLI (final y bajo incluidos): tonalidad con confianza y alternativas, escala, acordes de la tonalidad y los acordes más usados (con * los ajenos a la tonalidad). «Volver al directo» regresa a la vista en tiempo real. Si el archivo no se puede leer o es silencio, lo dice. `SkalePluginSelfTest --file audio.mp3 captura.png` lo prueba sin interfaz gráfica.
+
+![Análisis de un archivo](docs/plugin_archivo.png)
+
 Prueba sin anfitrión ni tarjeta de sonido (pasa un wav por `processBlock` en bloques de 512 y guarda una captura): `SkalePluginSelfTest audio.wav captura.png` (se construye con `--target SkalePluginSelfTest`). En los cuatro preludios probados el plugin da la misma tonalidad que el analizador de archivos sobre esos mismos 60 s.
 
 **Licencia de JUCE:** JUCE se ofrece bajo AGPLv3 o con licencia comercial. Skale es propietario, así que **para distribuir el plugin hace falta la licencia comercial de JUCE** (compilarlo para uso propio no lo requiere). Alternativa sin JUCE: el SDK de VST3 (MIT) o CLAP, con una interfaz propia.
 
-Limitaciones de esta primera versión: no hay estado guardado, ni ajuste de la memoria ni de perfil en la interfaz, y el bonus del acorde final no se aplica (en tiempo real no hay final). El plugin no se ha probado en un anfitrión real (DAW) ni con `pluginval`.
+Limitaciones: no hay estado guardado, ni ajuste de la memoria ni de perfil en la interfaz, y el bonus del acorde final no se aplica (en tiempo real no hay final). El plugin no se ha probado en un anfitrión real (DAW) ni con `pluginval`.
 
 ## Línea de comandos
 
@@ -106,7 +110,7 @@ Con la misma configuración (Temperley, 4 s, 0,5) el peso del final mejora en lo
 
 1. Núcleo del analizador y CLI ✅
 2. Plugin JUCE (VST3 y aplicación independiente) con tiempo real y vista mínima ✅ (AU pendiente: solo macOS)
-3. Análisis de archivos arrastrados al plugin
+3. Análisis de archivos arrastrados al plugin ✅
 4. Línea de tiempo de acordes en la interfaz
 5. Pulido de UI y empaquetado
 

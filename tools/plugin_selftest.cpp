@@ -1,7 +1,10 @@
 // Prueba del plugin sin anfitrión: pasa un wav/mp3 por SkaleProcessor::processBlock
 // en bloques de 512 (como un anfitrión), espera al hilo de análisis, imprime la
 // tonalidad y guarda una captura de la interfaz.
-// Uso: SkalePluginSelfTest audio.mp3 captura.png [segundos_maximos]
+// Uso: SkalePluginSelfTest audio captura.png [segundos_maximos]
+//      SkalePluginSelfTest --file audio captura.png   (análisis de archivo, como al arrastrarlo)
+#include <string>
+
 #include <juce_audio_formats/juce_audio_formats.h>
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -10,6 +13,29 @@
 
 int main(int argc, char** argv) {
     juce::ScopedJuceInitialiser_GUI gui;
+    if (argc >= 4 && std::string(argv[1]) == "--file") {
+        SkaleProcessor proc;
+        proc.setPlayConfigDetails(2, 2, 44100.0, 512);
+        proc.analyzeFile(juce::File(argv[2]));
+        for (int i = 0; i < 600 && proc.fileState().status == FileAnalysisState::Status::Working; ++i) juce::Thread::sleep(100);
+        const auto st = proc.fileState();
+        if (st.status != FileAnalysisState::Status::Done) {
+            std::printf("estado=%d error=%s\n", int(st.status), st.error.toRawUTF8());
+            return 1;
+        }
+        std::printf("archivo=%s tonalidad=%s duracion=%.1fs acordes=%zu\n", st.fileName.toRawUTF8(),
+                    st.result.keyName.c_str(), st.result.durationSeconds, st.result.chordUsage.size());
+        std::unique_ptr<juce::AudioProcessorEditor> ed(proc.createEditor());
+        static_cast<SkaleEditor*>(ed.get())->refresh();
+        auto img = ed->createComponentSnapshot(ed->getLocalBounds());
+        juce::PNGImageFormat png;
+        juce::File out(argv[3]);
+        out.deleteFile();
+        juce::FileOutputStream os(out);
+        png.writeImageToStream(img, os);
+        ed.reset();
+        return 0;
+    }
     if (argc < 3) { std::printf("uso: %s audio captura.png [segundos]\n", argv[0]); return 2; }
     const double maxSeconds = argc > 3 ? std::atof(argv[3]) : 60.0;
 
