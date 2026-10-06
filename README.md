@@ -65,6 +65,17 @@ Barrido en 207 archivos (Temperley, con el final a 0,5 como base). Aciertos en m
 
 El bajo mejora de forma monótona en pop/rock (74 → 81) y también en las fugas (18 → 20). Los acordes mejoran mucho la clásica (preludios 24/24, fugas hasta 22/24) pero **empeoran con Temperley en pop** (74 → 69); con KS suben a 82, pero las etiquetas de Jamendo incluyen un voto de una variante de KS, así que esa cifra está favorecida. **`--bass-weight 1` está activado por defecto** (`--bass-weight 0` lo apaga). `--chord-weight` sigue en 0; `--chord-weight 0.6` es la opción para música clásica.
 
+### Cifra realista en música no clásica (etiquetas dadas por el autor)
+
+Las cifras del 70-78 % en Jamendo se midieron sobre temas **etiquetados por consenso de programas** (Essentia + librosa): solo cuentan los temas fáciles en los que los tres coinciden, y una de las tres etiquetas es una variante de KS. Es optimista. Con etiquetas puestas por el propio autor en el título («120 BPM A minor», beats, funk, trap, guitarra, piano; `tools/samples/author_labeled_*`, buscados con `tools/find_author_labeled.py`) sale otra cosa:
+
+| Conjunto | Skale (defecto) | Essentia EDMA | Essentia BGate | librosa + KS |
+|---|---|---|---|---|
+| 29 temas limpios (una pista, no obras de varios movimientos) | 16/29 (55 %) | 14/29 | 16/29 | 16/29 |
+| 101 temas, incluidas obras clásicas de varios movimientos (etiqueta con ruido: el título da la tonalidad de la obra y el archivo puede ser otro movimiento) | 47/101 (47 %) | 50 | 55 | 53 |
+
+Es decir: **en música real no clásica, Skale acierta alrededor del 50-55 %, igual que Essentia y librosa**, y el 78 % de arriba no debe leerse como la precisión esperada. La mitad de los fallos son el relativo menor o la quinta. Un tema con una tonalidad ambigua (beats con poca armonía, tonalidades modales) también cuenta como fallo. Con 29 temas el error típico es de ±9 puntos.
+
 ## Límites conocidos
 
 - Mayor y su relativo menor son ambiguos si la música no define el modo (Am F C G tiene las mismas notas que C mayor): por eso se devuelven candidatos con su confianza.
