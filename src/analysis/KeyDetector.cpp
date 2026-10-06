@@ -88,4 +88,14 @@ std::vector<KeyCandidate> KeyDetector::detect(const Chroma12& chroma, KeyProfile
     return out;
 }
 
+std::array<float, 24> KeyDetector::bassScores(const Chroma12& bass, double weight) {
+    std::array<float, 24> out{};
+    for (int t = 0; t < 12; ++t) {
+        const float v = float(weight * (double(bass[std::size_t(t)]) + 0.5 * double(bass[std::size_t((t + 7) % 12)])));
+        out[std::size_t(t * 2)] = v;
+        out[std::size_t(t * 2 + 1)] = v;
+    }
+    return out;
+}
+
 }  // namespace skale

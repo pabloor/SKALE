@@ -68,11 +68,8 @@ SongAnalysis analyze(const float* mono, std::size_t n, double sampleRate, const 
     if (options.bassWeight > 0) {
         Chroma12 bass = foldChroma(bassAcc, tuning);
         normalize(bass);
-        for (int t = 0; t < 12; ++t) {
-            for (int m = 0; m < 2; ++m) {
-                extra[std::size_t(t * 2 + m)] += float(options.bassWeight * (double(bass[std::size_t(t)]) + 0.5 * double(bass[std::size_t((t + 7) % 12)])));
-            }
-        }
+        const auto bs = KeyDetector::bassScores(bass, options.bassWeight);
+        for (std::size_t i = 0; i < 24; ++i) extra[i] += bs[i];
         hasExtra = true;
     }
     if (options.chordWeight > 0) {

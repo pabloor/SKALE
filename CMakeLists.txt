@@ -16,6 +16,7 @@ add_library(skale_core STATIC
   src/analysis/Chromagram.cpp
   src/analysis/Theory.cpp
   src/analysis/KeyDetector.cpp
+  src/analysis/KeyTracker.cpp
   src/analysis/ChordDetector.cpp
   src/analysis/Analyzer.cpp
   src/analysis/AudioFile.cpp

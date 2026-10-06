@@ -1,5 +1,6 @@
 // Tests sin dependencias: audio sintético (acordes con armónicos) contra el
 // analizador completo.
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -12,6 +13,7 @@
 #include "analysis/AudioFile.h"
 #include "analysis/Chromagram.h"
 #include "analysis/Fft.h"
+#include "analysis/KeyTracker.h"
 #include "analysis/Theory.h"
 
 using namespace skale;
@@ -274,6 +276,49 @@ void testWavFile() {
 
 }  // namespace
 
+// Alimenta el tracker en bloques de 512 muestras, como lo haría un plugin.
+void feed(KeyTracker& t, const std::vector<float>& audio) {
+    for (std::size_t i = 0; i < audio.size(); i += 512) t.process(audio.data() + i, std::min<std::size_t>(512, audio.size() - i));
+}
+
+void testKeyTracker() {
+    for (int tonic : {0, 2, 7, 9}) {
+        KeyTracker t(kRate);
+        CHECK(!t.snapshot().valid, "sin audio no hay respuesta");
+        feed(t, synthSong(majorProgression(tonic), 2.0, 3));
+        const auto s = t.snapshot();
+        CHECK(s.valid, "tonic %d: snapshot válido tras 24 s", tonic);
+        CHECK(s.key.tonic == tonic && s.key.mode == Mode::Major, "tonic %d mayor: %s", tonic, s.keyName.c_str());
+        CHECK(s.scaleNotes.size() == 7, "escala de 7 notas");
+        CHECK(s.hasChord && !s.chordName.empty(), "hay acorde actual");
+    }
+    {
+        KeyTracker t(kRate);
+        feed(t, synthSong(minorProgression(2), 2.0, 3));
+        const auto s = t.snapshot();
+        CHECK(s.valid && s.key.tonic == 2 && s.key.mode == Mode::Minor, "Re menor: %s", s.keyName.c_str());
+    }
+    {
+        // Cambio de tonalidad: con memoria de 8 s, tras 40 s en Sol mayor ya no manda el Do mayor anterior.
+        TrackerOptions o;
+        o.halfLifeSeconds = 8;
+        KeyTracker t(kRate, o);
+        feed(t, synthSong(majorProgression(0), 2.0, 4));
+        CHECK(t.snapshot().key.tonic == 0, "primero Do mayor");
+        feed(t, synthSong(majorProgression(7), 2.0, 5));
+        const auto s = t.snapshot();
+        CHECK(s.key.tonic == 7 && s.key.mode == Mode::Major, "después Sol mayor: %s", s.keyName.c_str());
+    }
+    {
+        KeyTracker t(kRate);
+        feed(t, std::vector<float>(std::size_t(10 * kRate), 0.f));
+        CHECK(!t.snapshot().valid, "el silencio no da respuesta");
+        feed(t, synthSong(majorProgression(5), 2.0, 3));
+        t.reset();
+        CHECK(!t.snapshot().valid, "reset borra el estado");
+    }
+}
+
 int main() {
     testTheory();
     testFft();
@@ -283,6 +328,7 @@ int main() {
     testChords();
     testSilence();
     testWavFile();
+    testKeyTracker();
     std::printf("%d comprobaciones, %d fallos\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;
 }

@@ -35,6 +35,10 @@ public:
                                             double endingWeight = 0,
                                             double endingMargin = 1e9,
                                             const std::array<float, 24>* extra = nullptr);
+
+    // Puntuación extra por tonalidad a partir del cromagrama del bajo (suma 1):
+    // weight x (tónica + 0,5 x quinta). Indexada como `extra` de detect().
+    static std::array<float, 24> bassScores(const Chroma12& bass, double weight);
 };
 
 }  // namespace skale
