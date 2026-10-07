@@ -47,10 +47,10 @@ class KeyNet(nn.Module):
         return s.reshape(x.shape[0], 24)
 
 
-def load(manifest, d, channels=2):
+def load(manifest, d, channels=2, use=None):
     M = json.load(open(manifest)); data = []
     for r in M:
-        a = np.fromfile(os.path.join(d, r['file']), dtype=np.float32).reshape(-1, channels, 36)
+        a = np.fromfile(os.path.join(d, r['file']), dtype=np.float32).reshape(-1, channels, 36)[:, :use or channels]
         data.append(dict(group=r['group'], name=r['name'], y=r['label'][0] * 2 + (0 if r['label'][1] == 'major' else 1),
                          x=np.sqrt(np.maximum(a, 0)) * 3.0))         # compresión; (T, 2, 36)
     return data
@@ -80,24 +80,30 @@ def main():
     ap.add_argument('--channels', type=int, default=2, help='canales por fotograma en los .bin (2 = cromagrama+bajo; 4 = +medios+agudos)')
     ap.add_argument('--ch', type=int, default=16); ap.add_argument('--hidden', type=int, default=64); ap.add_argument('--layers', type=int, default=3)
     ap.add_argument('--crop', type=int, default=128); ap.add_argument('--lr', type=float, default=3e-3); ap.add_argument('--drop', type=float, default=0.2)
+    ap.add_argument('--use-channels', type=int, default=0, help='usa solo los N primeros canales (p. ej. 2 de unos .bin de 4)')
+    ap.add_argument('--train-only', default='', help='grupos que van siempre a entrenamiento (p. ej. pseudoetiquetas)')
+    ap.add_argument('--group-scale', default='', help='factor de muestreo por grupo, p. ej. pseudo=0.5')
     ap.add_argument('--all', action='store_true', help='entrena con todos los datos (modelo final, sin conjunto de prueba)')
     ap.add_argument('--seed', type=int, default=0); ap.add_argument('--holdout', default='', help='grupos completos fuera del entrenamiento (coma)')
     a = ap.parse_args()
     torch.set_num_threads(4); rng = np.random.default_rng(a.seed); torch.manual_seed(a.seed)
-    data = load(a.manifest, a.frames, a.channels)
+    in_ch = a.use_channels or a.channels
+    data = load(a.manifest, a.frames, a.channels, in_ch)
     hold = set(filter(None, a.holdout.split(',')))
     idx = np.arange(len(data)); te = np.zeros(len(data), bool); srng = np.random.default_rng(12345)   # partición fija e independiente de la semilla
     for g in sorted({d['group'] for d in data}):
         gi = [i for i in idx if data[i]['group'] == g]
         if g in hold: te[gi] = True
+        elif g in set(filter(None, a.train_only.split(','))): pass
         else: te[srng.permutation(gi)[:max(1, len(gi) // 5)]] = True       # 20 % de cada grupo para prueba
     if a.all: te[:] = False
     tr = [i for i in idx if not te[i]]; ts = [i for i in idx if te[i]]
     gsize = collections.Counter(data[i]['group'] for i in tr)
-    p = np.array([gsize[data[i]['group']] ** -0.5 for i in tr]); p /= p.sum()      # muestreo ~ 1/sqrt(tamaño del grupo)
+    scale = {kv.split('=')[0]: float(kv.split('=')[1]) for kv in filter(None, a.group_scale.split(','))}
+    p = np.array([gsize[data[i]['group']] ** -0.5 * scale.get(data[i]['group'], 1.0) for i in tr]); p /= p.sum()      # muestreo ~ 1/sqrt(tamaño del grupo)
     print(f'entrenamiento {len(tr)}  prueba {len(ts)}', flush=True)
-    cfg = dict(ch=a.ch, hidden=a.hidden, drop=a.drop, in_ch=a.channels, layers=a.layers, crop=a.crop)
-    model = KeyNet(ch=a.ch, hidden=a.hidden, drop=a.drop, in_ch=a.channels, layers=a.layers); opt = torch.optim.AdamW(model.parameters(), lr=2e-3, weight_decay=1e-2)
+    cfg = dict(ch=a.ch, hidden=a.hidden, drop=a.drop, in_ch=in_ch, layers=a.layers, crop=a.crop)
+    model = KeyNet(ch=a.ch, hidden=a.hidden, drop=a.drop, in_ch=in_ch, layers=a.layers); opt = torch.optim.AdamW(model.parameters(), lr=2e-3, weight_decay=1e-2)
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=a.lr, total_steps=a.epochs * a.steps)
     def evaluate():
         per = collections.defaultdict(list)
