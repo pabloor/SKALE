@@ -65,6 +65,8 @@ std::vector<ChromaFrame> ChromaExtractor::process(const float* mono, std::size_t
 void ChromaExtractor::analyseFrame(const float* x, ChromaFrame& out) {
     out.chroma.fill(0.f);
     out.bass.fill(0.f);
+    out.mid.fill(0.f);
+    out.high.fill(0.f);
     out.silent = true;
 
     double energy = 0;
@@ -83,7 +85,7 @@ void ChromaExtractor::analyseFrame(const float* x, ChromaFrame& out) {
 
     const float floor = frameMax * float(params_.peakFloor);
     const double binHz = sampleRate_ / double(fftSize_);
-    double total = 0;
+    double total = 0, midTotal = 0, highTotal = 0;
 
     for (std::size_t i = minBin_; i <= maxBin_; ++i) {
         const float m = mag_[i];
@@ -108,10 +110,21 @@ void ChromaExtractor::analyseFrame(const float* x, ChromaFrame& out) {
         out.chroma[std::size_t(lo % 36)] += w * (1.f - frac);
         out.chroma[std::size_t((lo + 1) % 36)] += w * frac;
         total += double(w);
+        if (freq >= 250.0 && freq < 1000.0) {
+            out.mid[std::size_t(lo % 36)] += w * (1.f - frac);
+            out.mid[std::size_t((lo + 1) % 36)] += w * frac;
+            midTotal += double(w);
+        } else if (freq >= 1000.0) {
+            out.high[std::size_t(lo % 36)] += w * (1.f - frac);
+            out.high[std::size_t((lo + 1) % 36)] += w * frac;
+            highTotal += double(w);
+        }
     }
 
     if (total <= 0.0) return;
     for (float& v : out.chroma) v = float(double(v) / total);
+    if (midTotal > 0.0) for (float& v : out.mid) v = float(double(v) / midTotal);
+    if (highTotal > 0.0) for (float& v : out.high) v = float(double(v) / highTotal);
     out.silent = false;
 
     // Cromagrama del bajo: mismos picos y mismo reparto en 36 bins, solo 40-250 Hz.

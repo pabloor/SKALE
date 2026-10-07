@@ -53,6 +53,8 @@ struct WindowChroma {
 struct FrameChroma {
     Chroma36 chroma{};   // 36 bins por octava (3 por semitono, bin 3n = nota n a A=440), suma 1
     Chroma36 bass{};
+    Chroma36 mid{};
+    Chroma36 high{};
 };
 
 struct SongAnalysis {

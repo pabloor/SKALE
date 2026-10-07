@@ -26,14 +26,18 @@ def main():
            '#include <cstddef>\nnamespace skale::cnn {\n']
     names = []; ch = hid = 0
     for n, path in enumerate(a.models):
-        m = tkc.KeyNet(); m.load_state_dict(torch.load(path)); m.eval(); ch = m.ch; hid = m.head[0].out_features
+        ck = torch.load(path)
+        state, cfg = (ck['state'], ck['cfg']) if 'state' in ck else (ck, {})
+        if cfg.get('layers', 3) != 3: raise SystemExit('el exportador solo admite redes de 3 capas')
+        m = tkc.KeyNet(ch=cfg.get('ch', 16), hidden=cfg.get('hidden', 64), in_ch=cfg.get('in_ch', 2))
+        m.load_state_dict(state); m.eval(); ch = m.ch; hid = m.head[0].out_features; in_ch = m.in_ch
         for i, (c, b) in enumerate(((m.c1, m.bn1), (m.c2, m.bn2), (m.c3, m.bn3)), 1):
             w, bias = fold(c, b)
             out += [arr(f'k{n}Conv{i}W', w), arr(f'k{n}Conv{i}B', bias)]
         out += [arr(f'k{n}Head1W', m.head[0].weight.detach().numpy()), arr(f'k{n}Head1B', m.head[0].bias.detach().numpy()),
                 arr(f'k{n}Head2W', m.head[3].weight.detach().numpy()), arr(f'k{n}Head2B', m.head[3].bias.detach().numpy())]
         names.append(n)
-    out += [f'constexpr int kCh = {ch};\nconstexpr int kHidden = {hid};\n',
+    out += [f'constexpr int kCh = {ch};\nconstexpr int kHidden = {hid};\nconstexpr int kInCh = {in_ch};\n',
             'struct Net { const float *c1w, *c1b, *c2w, *c2b, *c3w, *c3b, *h1w, *h1b, *h2w, *h2b; };\n',
             f'constexpr int kNetCount = {len(names)};\nconstexpr Net kNets[kNetCount] = {{\n' +
             ',\n'.join(f'    {{k{n}Conv1W, k{n}Conv1B, k{n}Conv2W, k{n}Conv2B, k{n}Conv3W, k{n}Conv3B, k{n}Head1W, k{n}Head1B, k{n}Head2W, k{n}Head2B}}' for n in names) +

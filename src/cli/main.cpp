@@ -185,12 +185,14 @@ int main(int argc, char** argv) {
     }
 
     if (framesOut) {
-        // Serie de cromagramas para redes neuronales: float32 [n][2][36] (cromagrama, bajo).
+        // Serie de cromagramas para redes neuronales: float32 [n][4][36] (cromagrama, bajo, medios, agudos).
         std::FILE* fh = std::fopen(framesOut, "wb");
         if (!fh) { std::fprintf(stderr, "no se pudo escribir %s\n", framesOut); return 1; }
         for (const auto& f : a.frames) {
             std::fwrite(f.chroma.data(), sizeof(float), 36, fh);
             std::fwrite(f.bass.data(), sizeof(float), 36, fh);
+            std::fwrite(f.mid.data(), sizeof(float), 36, fh);
+            std::fwrite(f.high.data(), sizeof(float), 36, fh);
         }
         std::fclose(fh);
         return 0;

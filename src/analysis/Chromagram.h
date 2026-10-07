@@ -17,6 +17,8 @@ using Chroma12 = std::array<float, 12>;
 struct ChromaFrame {
     Chroma36 chroma{};   // suma 1, o todo ceros si el fotograma es silencio
     Chroma36 bass{};     // lo mismo pero solo entre 40 y 250 Hz (el bajo); ceros si no hay picos
+    Chroma36 mid{};      // 250-1000 Hz; ceros si no hay picos
+    Chroma36 high{};     // 1000 Hz hasta maxFreq; ceros si no hay picos
     double time = 0;     // segundos del centro de la ventana
     bool silent = true;
 };
