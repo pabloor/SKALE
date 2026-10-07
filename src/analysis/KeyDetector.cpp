@@ -174,4 +174,14 @@ std::array<float, 24> KeyDetector::windowVotes(const std::vector<Chroma12>& wind
     return votes;
 }
 
+std::array<float, 24> KeyDetector::learnedLogProbs(const Chroma12& chroma, const Chroma12& bass,
+                                                    const Chroma12* ending,
+                                                    const std::array<float, 24>* votes) {
+    std::array<float, 24> lp{};
+    const auto c = detectLearned(chroma, bass, ending, votes);
+    if (c.empty()) return lp;
+    for (const auto& k : c) lp[std::size_t(k.key.tonic * 2 + (k.key.mode == Mode::Minor ? 1 : 0))] = std::log(std::max(k.confidence, 1e-12f));
+    return lp;
+}
+
 }  // namespace skale

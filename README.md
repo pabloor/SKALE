@@ -80,6 +80,24 @@ Es decir: **en música real no clásica, Skale acierta alrededor del 50-55 %, ig
 
 Con **GuitarSet** (360 fragmentos de guitarra con la tonalidad anotada por personas, CC BY 4.0, [Zenodo](https://zenodo.org/records/3371780); el audio no está en el repo, solo `tools/samples/guitarset_expected.csv`), los demás conjuntos y 108 progresiones sintéticas (`tools/gen_synth_training.py`) hay 7.546 archivos etiquetados (ver «Datos de electrónica» más abajo). `tools/extract_features.py` vuelca las características (`--features` de la CLI, ya volcadas en `tools/samples/features.json`) y `tools/train_key_model.py` aprende, por modo, pesos para `[correlación de Temperley, bajo rotado, final rotado, voto por ventanas]` (regresión logística condicional sobre las 24 tonalidades, `KeyModelWeights.h`). `--model classic` vuelve al método anterior (con `--profile` y los pesos manuales; el aprendido los ignora).
 
+### Red neuronal de tonalidad (por defecto, combinada con el modelo lineal)
+
+Además del modelo lineal hay una **red convolucional** (`tools/train_key_cnn.py`, ≈ 88.000 parámetros, 3 redes promediadas) sobre la **serie temporal de cromagramas finos** (36 bins por octava, cromagrama y bajo, `skale-cli --frames`; ~0,19 s por fotograma). Es **equivariante a la transposición por construcción** (convoluciones con relleno circular en el eje de tono y una cabeza que puntúa cada tónica con las características giradas hasta ella), así que no tiene que aprender cada tonalidad por separado. Se entrena en CPU en ~10 min por red con los 7.545 archivos etiquetados, muestreando recortes de ~24 s (aumento: desafinación de ±1 bin), y se exporta a C++ sin dependencias (`tools/export_key_cnn.py` → `KeyCnnWeights.h`, BatchNorm plegado; C++ y PyTorch dan la misma tonalidad y probabilidad). La tonalidad final combina las log-probabilidades: **0,7 × red + 0,3 × modelo lineal** (`--model ensemble`, por defecto; `cnn` solo la red, `learned` solo el lineal, `classic` el método manual). Analizar una canción de 3,5 min tarda ≈ 3 s (≈ 0,7 s solo con el lineal).
+
+Resultados (acierto de tonalidad exacta; cada fila sale de una partición donde los datos de prueba **no se usaron para entrenar** ninguno de los dos modelos):
+
+| Prueba | Lineal | Red | **Red 70 % + lineal 30 %** |
+|---|---|---|---|
+| FMAK, 1.096 pistas de prueba (partición 80/20; resto de FMAK en el entrenamiento) | 52,4 % | 58,7 % | **60,0 %** |
+| Canciones completas, conjuntos enteros fuera: Bach / clásica / etiquetas de autor / Jamendo / folk (media) | 72,2 % | 73,5 % | **80,7 %** |
+| …desglose (Bach, clásica, autor, Jamendo, folk) | 81, 83, 53, 81, 62 | 85, 58, 65, 83, 76 | **98, 75, 67, 88, 76** |
+| FMAK entero fuera del entrenamiento (5.482 pistas) | 51,2 % | 53–55 % | – |
+| GuitarSet entero fuera (360) | 60 % | 53 % | – |
+| GiantSteps+ entero fuera (259) | 71 % | 89 % | – |
+| Beatport (220 de prueba) | 52,7 % | 70,9 % | 66,4 % |
+
+Lectura honesta: la red **gana claramente con datos del mismo dominio** (FMAK +6 puntos; el lineal no mejoraba con ellos) y combinada con el lineal es lo mejor en canciones completas (+8,5 puntos). **Pierde en guitarra acústica** (GuitarSet) cuando no ha visto ese dominio, y en el resto de dominios nuevos la ventaja es pequeña (+2 a +4 puntos en FMAK sin datos de FMA). GiantSteps+ y Beatport comparten origen y anotadores, de ahí el 89 %: no es representativo. En GuitarSet y GiantSteps+ las particiones aleatorias 80/20 filtran interpretaciones del mismo fragmento entre entrenamiento y prueba y dan cifras infladas (79 % y 98 %); por eso los controles con el conjunto entero fuera. Las 3 redes finales usan todos los datos, así que su acierto no se puede medir sobre ellos: las cifras fiables son las de la tabla. **Esperable en música real nueva: ≈ 58–60 % de tonalidad exacta (60 % en FMAK, rock 42–50 %) y ≈ 80 % en canciones completas del tipo de las probadas.**
+
 **Voto por ventanas:** el audio se divide en ventanas de 8 s (paso de 4 s) y cada una «vota» por su mejor tonalidad con Temperley; la característica es la fracción de ventanas que votan por cada candidata (ventanas de 4 s o 16 s dan resultados parecidos, 8 s el mejor). Aportó +3 puntos de media validada fuera de conjunto.
 
 **Datos de electrónica:** [GiantSteps+](https://zenodo.org/records/4153506) (600 fragmentos de 2 min con tonalidad anotada por expertos, CC BY-SA 4.0; usamos los 259 de confianza alta y una sola tonalidad con modo claro) y [Beatport EDM Key](https://zenodo.org/records/1101082) (1.486 fragmentos, CC BY-SA 4.0; usamos 1.100: confianza alta y sin cambios de tonalidad en el fragmento; géneros: trance, house, breaks, downtempo, hip hop/R&B…). Etiquetas «aeolian» cuentan como menor y «ionian» como mayor; dorian, frigio, lidio, mixolidio y locrio se descartan. El audio no está en el repo: solo las listas (`tools/samples/giantsteps_plus_conf2_expected.csv`, `beatport_edm_clean_expected.csv`).

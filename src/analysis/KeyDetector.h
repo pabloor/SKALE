@@ -48,6 +48,11 @@ public:
                                                    const Chroma12* ending,
                                                    const std::array<float, 24>* votes = nullptr);
 
+    // Log-probabilidades (24, tónica * 2 + menor) del mismo modelo aprendido, para combinarlo con la red.
+    static std::array<float, 24> learnedLogProbs(const Chroma12& chroma, const Chroma12& bass,
+                                                 const Chroma12* ending,
+                                                 const std::array<float, 24>* votes = nullptr);
+
     // Voto por ventanas: cada ventana vota por su mejor tonalidad con Temperley.
     static std::array<float, 24> windowVotes(const std::vector<Chroma12>& windowChromas);
 

@@ -12,7 +12,8 @@ void usage() {
     std::fprintf(stderr,
                  "Uso: skale-cli <archivo.wav|archivo.mp3> [opciones]\n"
                  "  --json            salida en JSON\n"
-                 "  --model <classic|learned>  modelo de tonalidad (por defecto learned; classic usa --profile y los pesos)\n"
+                 "  --model <classic|learned>  modelo de tonalidad: ensemble (por defecto: red + modelo lineal), cnn (solo la red), learned (solo el lineal) o classic\n"
+                 "  --frames <archivo.bin>     vuelca la serie de cromagramas finos (float32, para redes)\n"
                  "  --features        volcado de cromagramas y uso de acordes (JSON, para experimentos)\n"
                  "  --timeline        muestra la línea de tiempo de acordes\n"
                  "  --solfege         Do Re Mi en lugar de C D E\n"
@@ -120,6 +121,7 @@ void printJson(const skale::SongAnalysis& a, bool timeline) {
 int main(int argc, char** argv) {
     std::string path;
     bool json = false, timeline = false, features = false;
+    const char* framesOut = nullptr;
     skale::AnalysisOptions options;
 
     for (int i = 1; i < argc; ++i) {
@@ -136,8 +138,10 @@ int main(int argc, char** argv) {
             options.endingWeight = std::atof(argv[++i]);
         } else if (!std::strcmp(arg, "--model") && i + 1 < argc) {
             const char* mname = argv[++i];
-            if (!std::strcmp(mname, "learned")) options.learnedModel = true;
-            else if (!std::strcmp(mname, "classic")) options.learnedModel = false;
+            if (!std::strcmp(mname, "ensemble")) { options.cnn = true; options.learnedModel = true; }
+            else if (!std::strcmp(mname, "learned")) { options.learnedModel = true; options.cnn = false; }
+            else if (!std::strcmp(mname, "classic")) { options.learnedModel = false; options.cnn = false; }
+            else if (!std::strcmp(mname, "cnn")) { options.cnn = true; options.learnedModel = false; }
             else { usage(); return 2; }
         } else if (!std::strcmp(arg, "--chroma-gamma") && i + 1 < argc) {
             options.chroma.gamma = std::atof(argv[++i]);
@@ -149,6 +153,9 @@ int main(int argc, char** argv) {
             options.chroma.peakFloor = std::atof(argv[++i]);
         } else if (!std::strcmp(arg, "--window") && i + 1 < argc) {
             options.windowSeconds = std::atof(argv[++i]);
+        } else if (!std::strcmp(arg, "--frames") && i + 1 < argc) {
+            framesOut = argv[++i];
+            options.keepFrames = true;
         } else if (!std::strcmp(arg, "--features")) {
             features = true;
         } else if (!std::strcmp(arg, "--bass-weight") && i + 1 < argc) {
@@ -177,6 +184,17 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    if (framesOut) {
+        // Serie de cromagramas para redes neuronales: float32 [n][2][36] (cromagrama, bajo).
+        std::FILE* fh = std::fopen(framesOut, "wb");
+        if (!fh) { std::fprintf(stderr, "no se pudo escribir %s\n", framesOut); return 1; }
+        for (const auto& f : a.frames) {
+            std::fwrite(f.chroma.data(), sizeof(float), 36, fh);
+            std::fwrite(f.bass.data(), sizeof(float), 36, fh);
+        }
+        std::fclose(fh);
+        return 0;
+    }
     if (features) {
         // Volcado para experimentar con modelos fuera de C++: cromagramas y uso de acordes.
         auto arr = [](const skale::Chroma12& c) {

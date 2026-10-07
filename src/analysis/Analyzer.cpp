@@ -1,4 +1,5 @@
 #include "analysis/Analyzer.h"
+#include "analysis/KeyCnn.h"
 
 #include <algorithm>
 #include <array>
@@ -40,6 +41,21 @@ SongAnalysis analyze(const float* mono, std::size_t n, double sampleRate, const 
         ++active;
     }
     if (active == 0) return out;
+
+    if (options.keepFrames || options.cnn) {
+        FrameChroma pair;
+        int k = 0;
+        for (const auto& f : frames) {
+            if (f.silent) continue;
+            for (std::size_t i = 0; i < 36; ++i) { pair.chroma[i] += f.chroma[i]; pair.bass[i] += f.bass[i]; }
+            if (++k == 2) {
+                for (std::size_t i = 0; i < 36; ++i) { pair.chroma[i] *= 0.5f; pair.bass[i] *= 0.5f; }
+                out.frames.push_back(pair);
+                pair = {};
+                k = 0;
+            }
+        }
+    }
 
     const int tuning = estimateTuning(acc);
     out.tuningCents = tuningToCents(tuning);
@@ -147,7 +163,28 @@ SongAnalysis analyze(const float* mono, std::size_t n, double sampleRate, const 
     for (const auto& w : out.windows) winChromas.push_back(w.chroma);
     const std::array<float, 24> votes = KeyDetector::windowVotes(winChromas);
 
-    auto candidates = options.learnedModel
+    std::vector<KeyCandidate> cnnCandidates;
+    if (options.cnn) {
+        auto lp = cnnKeyLogProbs(out.frames);
+        if (options.learnedModel) {   // combinación con el modelo lineal
+            const auto lin = KeyDetector::learnedLogProbs(out.chroma, out.bassChroma, options.endingSeconds > 0 ? &out.endingChroma : nullptr, &votes);
+            for (std::size_t i = 0; i < 24; ++i) lp[i] = float(options.cnnWeight) * lp[i] + float(1.0 - options.cnnWeight) * lin[i];
+        }
+        std::vector<int> order(24);
+        for (int i = 0; i < 24; ++i) order[std::size_t(i)] = i;
+        std::sort(order.begin(), order.end(), [&](int a2, int b2) { return lp[std::size_t(a2)] > lp[std::size_t(b2)]; });
+        double denom = 0;
+        for (float v : lp) denom += std::exp(double(v - lp[std::size_t(order[0])]));
+        for (int i : order) {
+            KeyCandidate c;
+            c.key = {i / 2, i % 2 == 0 ? Mode::Major : Mode::Minor};
+            c.confidence = float(std::exp(double(lp[std::size_t(i)] - lp[std::size_t(order[0])])) / denom);
+            c.correlation = lp[std::size_t(i)];
+            cnnCandidates.push_back(c);
+        }
+    }
+
+    auto candidates = options.cnn ? cnnCandidates : options.learnedModel
         ? KeyDetector::detectLearned(out.chroma, out.bassChroma, options.endingSeconds > 0 ? &out.endingChroma : nullptr, &votes)
         : KeyDetector::detect(out.chroma, options.profile,
                                           hasEnding ? &ending : nullptr, options.endingWeight,
