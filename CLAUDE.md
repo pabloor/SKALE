@@ -50,8 +50,8 @@ Pasos completos en `docs/entrenar_en_mac.md`: `tools/fetch_datasets.py` (descarg
 `tools/prepare_training.py` (características con skale-cli) → `tools/train_key_cnn.py`
 (`--spec` para la red de espectro, `--split tools/samples/test_split.json`, `--device auto` usa MPS)
 → `tools/eval_key_cnn.py` → `tools/export_key_cnn.py`. En este Mac (M5): `.venv` con PyTorch (MPS, ~5 min
-por red), datos en `~/skale-datos` y características en `~/skale-train`; para compilar y descargar hay dos
-arreglos locales descritos en `docs/entrenar_en_mac.md` (cabeceras de C++ y certificados). Configuración usada: `--epochs 30 --steps 100`;
+por red), datos en `~/skale-datos` y características en `~/skale-train`; para descargar hace falta
+`SSL_CERT_FILE=~/.skale-cacerts.pem` (certificados del llavero; ver `docs/entrenar_en_mac.md`). Configuración usada: `--epochs 30 --steps 100`;
 red de espectro ancha `--ch 24`.
 
 ## Ya probado sin mejora (no repetir sin una idea nueva)
