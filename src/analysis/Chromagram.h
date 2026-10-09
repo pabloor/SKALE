@@ -13,12 +13,16 @@ namespace skale {
 // a A=440; los bins vecinos recogen las desafinaciones de ±33 cents.
 using Chroma36 = std::array<float, 36>;
 using Chroma12 = std::array<float, 12>;
+// Espectro en escala logarítmica: 6 octavas desde La1 (55 Hz) a 3 bins por semitono (216 bins).
+constexpr std::size_t kSpecBins = 216;
+using LogSpec = std::array<float, kSpecBins>;
 
 struct ChromaFrame {
     Chroma36 chroma{};   // suma 1, o todo ceros si el fotograma es silencio
     Chroma36 bass{};     // lo mismo pero solo entre 40 y 250 Hz (el bajo); ceros si no hay picos
     Chroma36 mid{};      // 250-1000 Hz; ceros si no hay picos
     Chroma36 high{};     // 1000 Hz hasta maxFreq; ceros si no hay picos
+    LogSpec spec{};      // magnitud interpolada en 55 Hz * 2^(k/36), raíz de (m / máximo); ceros si es silencio
     double time = 0;     // segundos del centro de la ventana
     bool silent = true;
 };

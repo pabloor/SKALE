@@ -47,9 +47,45 @@ class KeyNet(nn.Module):
         return s.reshape(x.shape[0], 24)
 
 
-def load(manifest, d, channels=2, use=None):
+class KeyNetSpec(nn.Module):
+    """Variante sobre el espectro logarítmico (216 bins = 6 octavas x 36 desde La1, 55 Hz).
+    Conv a tercio de semitono -> agrupado máximo a semitono (72) -> 2 conv -> plegado de octavas
+    a 12 clases de nota -> cabeza equivariante sobre las 12 tónicas."""
+    def __init__(self, ch=16, hidden=64, drop=0.2):
+        super().__init__()
+        self.ch = ch; self.in_ch = 1; self.nl = 3; self.spec = True
+        self.c1 = nn.Conv2d(1, ch, (3, 9)); self.c2 = nn.Conv2d(ch, ch, (3, 5)); self.c3 = nn.Conv2d(ch, ch, (3, 5))
+        self.bn1 = nn.BatchNorm2d(ch); self.bn2 = nn.BatchNorm2d(ch); self.bn3 = nn.BatchNorm2d(ch)
+        self.head = nn.Sequential(nn.Linear(4 * ch * 12, hidden), nn.ReLU(), nn.Dropout(drop), nn.Linear(hidden, 2))
+        idx = (torch.arange(12)[:, None] + torch.arange(12)[None, :]) % 12
+        self.register_buffer('rot', idx)
+
+    @staticmethod
+    def _conv(x, conv, bn, kp):
+        x = F.pad(x, (kp, kp, 1, 1))                         # ceros en frecuencia y en tiempo
+        return F.relu(bn(conv(x)))
+
+    def forward(self, x):                                    # x: (B, 1, T, 216)
+        x = self._conv(x, self.c1, self.bn1, 4)
+        x = F.max_pool2d(x, (1, 3))                          # (B, ch, T, 72): un bin por semitono
+        x = self._conv(x, self.c2, self.bn2, 2); x = self._conv(x, self.c3, self.bn3, 2)
+        f = torch.cat([x.mean(2), x.amax(2)], dim=1)         # (B, 2ch, 72)
+        f = f.reshape(f.shape[0], f.shape[1], 6, 12)         # 6 octavas x 12 semitonos (índice 0 = La)
+        f = torch.cat([f.mean(2), f.amax(2)], dim=1)         # (B, 4ch, 12)
+        f = torch.roll(f, 9, dims=2)                         # índice n = nota n (0 = Do)
+        r = f[:, :, self.rot].permute(0, 2, 1, 3).reshape(f.shape[0], 12, -1)
+        return self.head(r).reshape(f.shape[0], 24)          # (tónica, modo) -> tónica*2 + modo
+
+
+def load(manifest, d, channels=2, use=None, spec_dir=None):
     M = json.load(open(manifest)); data = []
     for r in M:
+        if spec_dir:
+            path = os.path.join(spec_dir, r['file'])
+            if not os.path.exists(path): continue
+            a = np.fromfile(path, dtype=np.float32).reshape(-1, 1, 216)
+            data.append(dict(group=r['group'], name=r['name'], y=r['label'][0] * 2 + (0 if r['label'][1] == 'major' else 1), x=a * 3.0))
+            continue
         a = np.fromfile(os.path.join(d, r['file']), dtype=np.float32).reshape(-1, channels, 36)[:, :use or channels]
         data.append(dict(group=r['group'], name=r['name'], y=r['label'][0] * 2 + (0 if r['label'][1] == 'major' else 1),
                          x=np.sqrt(np.maximum(a, 0)) * 3.0))         # compresión; (T, 2, 36)
@@ -83,12 +119,13 @@ def main():
     ap.add_argument('--use-channels', type=int, default=0, help='usa solo los N primeros canales (p. ej. 2 de unos .bin de 4)')
     ap.add_argument('--train-only', default='', help='grupos que van siempre a entrenamiento (p. ej. pseudoetiquetas)')
     ap.add_argument('--group-scale', default='', help='factor de muestreo por grupo, p. ej. pseudo=0.5')
+    ap.add_argument('--spec', default='', help='carpeta con espectros logarítmicos (skale-cli --spec): usa KeyNetSpec')
     ap.add_argument('--all', action='store_true', help='entrena con todos los datos (modelo final, sin conjunto de prueba)')
     ap.add_argument('--seed', type=int, default=0); ap.add_argument('--holdout', default='', help='grupos completos fuera del entrenamiento (coma)')
     a = ap.parse_args()
     torch.set_num_threads(4); rng = np.random.default_rng(a.seed); torch.manual_seed(a.seed)
     in_ch = a.use_channels or a.channels
-    data = load(a.manifest, a.frames, a.channels, in_ch)
+    data = load(a.manifest, a.frames, a.channels, in_ch, a.spec or None)
     hold = set(filter(None, a.holdout.split(',')))
     idx = np.arange(len(data)); te = np.zeros(len(data), bool); srng = np.random.default_rng(12345)   # partición fija e independiente de la semilla
     for g in sorted({d['group'] for d in data}):
@@ -103,7 +140,9 @@ def main():
     p = np.array([gsize[data[i]['group']] ** -0.5 * scale.get(data[i]['group'], 1.0) for i in tr]); p /= p.sum()      # muestreo ~ 1/sqrt(tamaño del grupo)
     print(f'entrenamiento {len(tr)}  prueba {len(ts)}', flush=True)
     cfg = dict(ch=a.ch, hidden=a.hidden, drop=a.drop, in_ch=in_ch, layers=a.layers, crop=a.crop)
-    model = KeyNet(ch=a.ch, hidden=a.hidden, drop=a.drop, in_ch=in_ch, layers=a.layers); opt = torch.optim.AdamW(model.parameters(), lr=2e-3, weight_decay=1e-2)
+    model = KeyNetSpec(ch=a.ch, hidden=a.hidden, drop=a.drop) if a.spec else KeyNet(ch=a.ch, hidden=a.hidden, drop=a.drop, in_ch=in_ch, layers=a.layers)
+    if a.spec: cfg['spec'] = True
+    opt = torch.optim.AdamW(model.parameters(), lr=2e-3, weight_decay=1e-2)
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=a.lr, total_steps=a.epochs * a.steps)
     def evaluate():
         per = collections.defaultdict(list)
@@ -118,6 +157,8 @@ def main():
             xs = torch.from_numpy(xs).permute(0, 2, 1, 3)
             # aumento: desafinación aleatoria de ±1 bin (±33 cents) con la misma etiqueta
             xs = torch.roll(xs, int(rng.integers(-1, 2)), dims=3)
+            if a.spec and rng.random() < 0.5:   # además, transposición de ±1-2 semitonos (en el espectro no es circular)
+                k = int(rng.choice([-6, -3, 3, 6])); xs = torch.roll(xs, k, dims=3); ys = ((ys // 2 + k // 3) % 12) * 2 + ys % 2
             loss = F.cross_entropy(model(xs), torch.from_numpy(ys).long(), label_smoothing=0.05)
             opt.zero_grad(); loss.backward(); opt.step(); sched.step(); loss_sum += loss.item()
         msg = f'época {ep + 1}/{a.epochs}  pérdida {loss_sum / a.steps:.3f}  {time.time() - t0:.0f}s'

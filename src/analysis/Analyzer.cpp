@@ -48,8 +48,10 @@ SongAnalysis analyze(const float* mono, std::size_t n, double sampleRate, const 
         for (const auto& f : frames) {
             if (f.silent) continue;
             for (std::size_t i = 0; i < 36; ++i) { pair.chroma[i] += f.chroma[i]; pair.bass[i] += f.bass[i]; pair.mid[i] += f.mid[i]; pair.high[i] += f.high[i]; }
+            for (std::size_t i = 0; i < kSpecBins; ++i) pair.spec[i] += f.spec[i];
             if (++k == 2) {
                 for (std::size_t i = 0; i < 36; ++i) { pair.chroma[i] *= 0.5f; pair.bass[i] *= 0.5f; pair.mid[i] *= 0.5f; pair.high[i] *= 0.5f; }
+                for (std::size_t i = 0; i < kSpecBins; ++i) pair.spec[i] *= 0.5f;
                 out.frames.push_back(pair);
                 pair = {};
                 k = 0;

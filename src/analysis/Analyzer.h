@@ -55,6 +55,7 @@ struct FrameChroma {
     Chroma36 bass{};
     Chroma36 mid{};
     Chroma36 high{};
+    LogSpec spec{};
 };
 
 struct SongAnalysis {

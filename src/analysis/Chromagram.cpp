@@ -67,6 +67,7 @@ void ChromaExtractor::analyseFrame(const float* x, ChromaFrame& out) {
     out.bass.fill(0.f);
     out.mid.fill(0.f);
     out.high.fill(0.f);
+    out.spec.fill(0.f);
     out.silent = true;
 
     double energy = 0;
@@ -125,6 +126,19 @@ void ChromaExtractor::analyseFrame(const float* x, ChromaFrame& out) {
     for (float& v : out.chroma) v = float(double(v) / total);
     if (midTotal > 0.0) for (float& v : out.mid) v = float(double(v) / midTotal);
     if (highTotal > 0.0) for (float& v : out.high) v = float(double(v) / highTotal);
+
+    // Espectro logarítmico: magnitud interpolada linealmente en el centro de cada bin.
+    float specMax = 0.f;
+    for (std::size_t k = 0; k < kSpecBins; ++k) {
+        const double x = 55.0 * std::pow(2.0, double(k) / 36.0) / binHz;
+        const std::size_t i0 = std::size_t(x);
+        if (i0 + 1 >= fftSize_ / 2) break;
+        const double fr = x - double(i0);
+        const float m = float((1.0 - fr) * double(std::abs(buf_[i0])) + fr * double(std::abs(buf_[i0 + 1])));
+        out.spec[k] = m;
+        specMax = std::max(specMax, m);
+    }
+    if (specMax > 0.f) for (float& v : out.spec) v = std::sqrt(v / specMax);
     out.silent = false;
 
     // Cromagrama del bajo: mismos picos y mismo reparto en 36 bins, solo 40-250 Hz.
