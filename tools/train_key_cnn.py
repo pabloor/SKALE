@@ -8,7 +8,7 @@ características giradas hasta esa posición. Los 36 logits por modo se reducen 
 sobre los 3 sub-bins de cada semitono. Resultado: 24 logits (tónica*2 + modo).
 
 Uso: tools/train_key_cnn.py MANIFEST.json DIR_FRAMES [--epochs 25] [--out modelo.pt]
-Necesita torch (CPU basta) y numpy.
+Necesita torch y numpy. Usa la GPU si la hay (CUDA o Apple MPS) y, si no, todos los núcleos de la CPU.
 """
 import argparse, collections, json, os, time
 import numpy as np
@@ -98,14 +98,21 @@ def crop(x, T, rng):
     s = rng.integers(0, n - T + 1); return x[s:s + T]
 
 
+def pick_device(name='auto'):
+    if name != 'auto': return torch.device(name)
+    if torch.cuda.is_available(): return torch.device('cuda')
+    if getattr(torch.backends, 'mps', None) and torch.backends.mps.is_available(): return torch.device('mps')
+    return torch.device('cpu')
+
+
 def predict(model, x, T=128):
-    model.eval()
+    model.eval(); dev = next(model.parameters()).device
     with torch.no_grad():
         n = len(x)
         if n < T: x = np.concatenate([x] * (T // n + 1))[:T]; n = T
         starts = list(range(0, n - T + 1, T // 2)) or [0]
         b = torch.from_numpy(np.stack([x[s:s + T] for s in starts])).permute(0, 2, 1, 3)   # (K,2,T,36)
-        return F.log_softmax(model(b), 1).mean(0).numpy()
+        return F.log_softmax(model(b.to(dev)), 1).mean(0).cpu().numpy()
 
 
 def main():
@@ -122,8 +129,12 @@ def main():
     ap.add_argument('--spec', default='', help='carpeta con espectros logarítmicos (skale-cli --spec): usa KeyNetSpec')
     ap.add_argument('--all', action='store_true', help='entrena con todos los datos (modelo final, sin conjunto de prueba)')
     ap.add_argument('--seed', type=int, default=0); ap.add_argument('--holdout', default='', help='grupos completos fuera del entrenamiento (coma)')
+    ap.add_argument('--split', default='', help='JSON con la lista [grupo, nombre] de prueba (p. ej. tools/samples/test_split.json); '
+                    'si falta, la partición fija aleatoria del 20 %% por grupo')
+    ap.add_argument('--device', default='auto', help='auto, cpu, mps o cuda'); ap.add_argument('--threads', type=int, default=0, help='hilos de CPU (0 = todos)')
     a = ap.parse_args()
-    torch.set_num_threads(4); rng = np.random.default_rng(a.seed); torch.manual_seed(a.seed)
+    torch.set_num_threads(a.threads or os.cpu_count() or 4); rng = np.random.default_rng(a.seed); torch.manual_seed(a.seed)
+    dev = pick_device(a.device); print('dispositivo', dev, flush=True)
     in_ch = a.use_channels or a.channels
     data = load(a.manifest, a.frames, a.channels, in_ch, a.spec or None)
     hold = set(filter(None, a.holdout.split(',')))
@@ -133,6 +144,9 @@ def main():
         if g in hold: te[gi] = True
         elif g in set(filter(None, a.train_only.split(','))): pass
         else: te[srng.permutation(gi)[:max(1, len(gi) // 5)]] = True       # 20 % de cada grupo para prueba
+    if a.split:
+        names = {tuple(r) for r in json.load(open(a.split))}
+        te = np.array([(d['group'], d['name']) in names for d in data]); te[[i for i in idx if data[i]['group'] in hold]] = True
     if a.all: te[:] = False
     tr = [i for i in idx if not te[i]]; ts = [i for i in idx if te[i]]
     gsize = collections.Counter(data[i]['group'] for i in tr)
@@ -142,6 +156,7 @@ def main():
     cfg = dict(ch=a.ch, hidden=a.hidden, drop=a.drop, in_ch=in_ch, layers=a.layers, crop=a.crop)
     model = KeyNetSpec(ch=a.ch, hidden=a.hidden, drop=a.drop) if a.spec else KeyNet(ch=a.ch, hidden=a.hidden, drop=a.drop, in_ch=in_ch, layers=a.layers)
     if a.spec: cfg['spec'] = True
+    model.to(dev)
     opt = torch.optim.AdamW(model.parameters(), lr=2e-3, weight_decay=1e-2)
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=a.lr, total_steps=a.epochs * a.steps)
     def evaluate():
@@ -159,14 +174,14 @@ def main():
             xs = torch.roll(xs, int(rng.integers(-1, 2)), dims=3)
             if a.spec and rng.random() < 0.5:   # además, transposición de ±1-2 semitonos (en el espectro no es circular)
                 k = int(rng.choice([-6, -3, 3, 6])); xs = torch.roll(xs, k, dims=3); ys = ((ys // 2 + k // 3) % 12) * 2 + ys % 2
-            loss = F.cross_entropy(model(xs), torch.from_numpy(ys).long(), label_smoothing=0.05)
+            loss = F.cross_entropy(model(xs.to(dev)), torch.from_numpy(ys).long().to(dev), label_smoothing=0.05)
             opt.zero_grad(); loss.backward(); opt.step(); sched.step(); loss_sum += loss.item()
         msg = f'época {ep + 1}/{a.epochs}  pérdida {loss_sum / a.steps:.3f}  {time.time() - t0:.0f}s'
         if ts and ((ep + 1) % 5 == 0 or ep == a.epochs - 1):
             acc, n = evaluate(); msg += '  | ' + ' '.join(f'{g[:5]}={100 * v:.0f}({n[g]})' for g, v in acc.items())
         print(msg, flush=True)
-    torch.save(dict(state=model.state_dict(), cfg=cfg), a.out)
-    json.dump(dict(test=[int(i) for i in ts]), open(a.out + '.split.json', 'w'))
+    torch.save(dict(state={k: v.cpu() for k, v in model.state_dict().items()}, cfg=cfg), a.out)
+    json.dump(dict(test=[int(i) for i in ts], names=[[data[i]['group'], data[i]['name']] for i in ts]), open(a.out + '.split.json', 'w'))
 
 
 if __name__ == '__main__':
