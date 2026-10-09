@@ -13,6 +13,7 @@ void usage() {
                  "Uso: skale-cli <archivo.wav|archivo.mp3> [opciones]\n"
                  "  --json            salida en JSON\n"
                  "  --model <classic|learned>  modelo de tonalidad: ensemble (por defecto: red + modelo lineal), cnn (solo la red), learned (solo el lineal) o classic\n"
+                 "  --cnn-weight <w>           peso de las redes frente al lineal en ensemble (por defecto 0.85)\n"
                  "  --spec <archivo.bin>       vuelca el espectro logarítmico por fotograma (float32 [n][216])\n"
                  "  --frames <archivo.bin>     vuelca la serie de cromagramas finos (float32, para redes)\n"
                  "  --features        volcado de cromagramas y uso de acordes (JSON, para experimentos)\n"
@@ -145,6 +146,8 @@ int main(int argc, char** argv) {
             else if (!std::strcmp(mname, "classic")) { options.learnedModel = false; options.cnn = false; }
             else if (!std::strcmp(mname, "cnn")) { options.cnn = true; options.learnedModel = false; }
             else { usage(); return 2; }
+        } else if (!std::strcmp(arg, "--cnn-weight") && i + 1 < argc) {
+            options.cnnWeight = std::atof(argv[++i]);
         } else if (!std::strcmp(arg, "--chroma-gamma") && i + 1 < argc) {
             options.chroma.gamma = std::atof(argv[++i]);
         } else if (!std::strcmp(arg, "--chroma-min") && i + 1 < argc) {

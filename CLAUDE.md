@@ -10,38 +10,38 @@ GuitarSet 72, GiantSteps+ 51, resto pequeños). Métrica principal: acierto exac
 variada) y en el total; también MIREX (`tools/eval_key_cnn.py`).
 
 ## Cómo analiza ahora (por defecto, `--model ensemble`)
-Log-probabilidades de 24 tonalidades = 0,7 × media de 3 redes convolucionales de cromagrama
-(`src/analysis/KeyCnn.cpp`, pesos en `KeyCnnWeights.h`) + 0,3 × modelo lineal (`KeyModelWeights.h`).
+Log-probabilidades de 24 tonalidades = 0,85 × redes + 0,15 × modelo lineal (`KeyModelWeights.h`;
+`options.cnnWeight` en `src/analysis/Analyzer.h`, `--cnn-weight` en la CLI). Redes = 0,5 × media de 3 redes
+de cromagrama + 0,5 × media de 2 redes de espectro (`src/analysis/KeyCnn.cpp`, pesos en `KeyCnnWeights.h`).
 Las redes son equivariantes a la transposición. Entrada por fotograma (~0,19 s): cromagrama fino de
 36 bins/octava de 4 bandas (cromagrama, bajo, medios, agudos) y espectro logarítmico de 216 bins.
+Coste: ≈ 7 s para una pieza de 5,7 min en un M5 (3,5 s con el modelo anterior de 3 redes).
 
-## Resultados en la partición fija (acierto exacto)
+## Resultados en la partición fija (acierto exacto, 1.497 pistas disponibles)
 | Modelo | FMA | Beatport | GuitarSet | GS+ | Total |
 |---|---|---|---|---|---|
 | Lineal | 50,0 | 52,7 | 63,9 | 72,5 | 53,3 |
-| 3 redes de cromagrama | 60,7 | 69,1 | 81,9 | 86,3 | 64,7 |
-| **Actual: 0,7 × 3 redes + 0,3 × lineal** | 60,6 | 70,0 | 83,3 | 88,2 | 65,1 |
-| Red de espectro sola (`models/split_spec.pt`) | 61,5 | 67,7 | 77,8 | 90,2 | 65,2 |
-| Red de espectro ancha (`models/split_spec_w24.pt`) | 60,2 | 70,5 | 79,2 | 94,1 | 64,7 |
-| 0,5 × espectro + 0,5 × 3 redes de cromagrama (sin lineal) | 62,3 | 68,2 | 83,3 | 90,2 | 66,1 |
-| 0,5 × espectro ancha + 0,5 × 3 redes de cromagrama | 62,5 | 69,5 | 83,3 | 92,2 | 66,4 |
-| media de las 2 de espectro, mezcla 0,6, + 0,3 lineal | 61,9 | 70,5 | 83,3 | 88,2 | 66,1 |
+| 3 redes de cromagrama | 60,7 | 69,4 | 81,9 | 86,3 | 64,7 |
+| Anterior: 0,7 × 3 redes + 0,3 × lineal (lineal que vio la prueba) | 60,6 | 70,0 | 83,3 | 88,2 | 65,1 |
+| Una red de espectro sola (6 semillas/anchuras) | 59,5–61,5 | 63–69 | 75–79 | 88–94 | 63,1–65,2 |
+| 3 cromagrama + 2 espectro (`split_spec`, `split_spec_w24`), sin lineal | 62,2 | 68,9 | 83,3 | 92,2 | 66,2 |
+| …con otras 4 redes de espectro (semillas nuevas), sin lineal | 62,4 | 69,4 | 83,3 | 90,2 | 66,3 |
+| **Actual: 0,85 × (3 cromagrama + 2 espectro) + 0,15 × lineal** | 62,6 | 70,3 | 84,7 | 88,2 | 66,7 |
+| …con 0,3 de lineal | 60,9 | 69,9 | 81,9 | 88,2 | 65,3 |
 
-Conclusión provisional: añadir la red de espectro (peso ~0,5 frente a las de cromagrama) da ≈ +1,5–2
-puntos en FMA y ≈ +1,3 en total; el lineal ya no aporta cuando está la red de espectro. Con 1.096
-pistas de FMA, 1 punto ≈ el ruido estadístico: confirmar con más redes/semillas.
+Las filas con lineal se midieron con skale-cli (C++) y un lineal reentrenado sin la partición de prueba;
+las demás con `tools/eval_key_cnn.py` (C++ y PyTorch dan lo mismo). La mejora de las redes de espectro
+(+1,7 FMA) se confirmó con dos juegos de semillas; el lineal a 0,15 da +0,4 (ruido, pero no resta).
 
 ## Siguiente paso
-1. Entrenar las redes de espectro finales con todos los datos (`--all`) y exportarlas junto a las 3 de
-   cromagrama: `tools/export_key_cnn.py models/final_c2.pt models/final_c4.pt models/final_c4_long.pt
-   fin_spec.pt [fin_spec_w24.pt] --spec-weight 0.5`. La inferencia en C++ de la red de espectro ya está
-   hecha y verificada contra PyTorch (misma tonalidad y probabilidad con 4 decimales).
-2. Decidir si quitar el lineal del conjunto por defecto (`options.cnnWeight` en `src/analysis/Analyzer.h`).
-3. Compilar, `./build/skale_tests` (216 comprobaciones), actualizar las tablas del README.
+Ideas sin probar: más redes **distintas** (p. ej. espectro con ventana larga o de 4 bandas); reducir coste
+(la red de espectro ancha es la más lenta); comprobar el plugin (`build-plugin`) con los nuevos pesos.
 
 ## Modelos entrenados (`models/`, formato {'state','cfg'})
-- `final_c2.pt`, `final_c4.pt`, `final_c4_long.pt`: las 3 redes de producción (todos los datos);
-  reexportarlas reproduce byte a byte `src/analysis/KeyCnnWeights.h`.
+- `final_c2.pt`, `final_c4.pt`, `final_c4_long.pt`: las 3 redes de cromagrama de producción (todos los datos).
+- `final_spec.pt`, `final_spec_w24.pt`: las 2 redes de espectro de producción (todos los datos, anchura 16 y 24).
+  Exportar las 5: `tools/export_key_cnn.py models/final_c2.pt models/final_c4.pt models/final_c4_long.pt
+  models/final_spec.pt models/final_spec_w24.pt --spec-weight 0.5`.
 - `split_*.pt`: entrenadas sin la partición de prueba, para comparar (`split_c2`, `split_c4`,
   `split_c4_long`, `split_spec`, `split_spec_w24`).
 
@@ -49,7 +49,9 @@ pistas de FMA, 1 punto ≈ el ruido estadístico: confirmar con más redes/semil
 Pasos completos en `docs/entrenar_en_mac.md`: `tools/fetch_datasets.py` (descarga ~7 GB) →
 `tools/prepare_training.py` (características con skale-cli) → `tools/train_key_cnn.py`
 (`--spec` para la red de espectro, `--split tools/samples/test_split.json`, `--device auto` usa MPS)
-→ `tools/eval_key_cnn.py` → `tools/export_key_cnn.py`. Configuración usada: `--epochs 30 --steps 100`;
+→ `tools/eval_key_cnn.py` → `tools/export_key_cnn.py`. En este Mac (M5): `.venv` con PyTorch (MPS, ~5 min
+por red), datos en `~/skale-datos` y características en `~/skale-train`; para compilar y descargar hay dos
+arreglos locales descritos en `docs/entrenar_en_mac.md` (cabeceras de C++ y certificados). Configuración usada: `--epochs 30 --steps 100`;
 red de espectro ancha `--ch 24`.
 
 ## Ya probado sin mejora (no repetir sin una idea nueva)

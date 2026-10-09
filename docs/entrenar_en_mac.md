@@ -15,6 +15,17 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j
 ```
 
 Comprueba que PyTorch ve la GPU: `python -c "import torch; print(torch.backends.mps.is_available())"` → `True`.
+Con Python 3.14 de python.org también funciona (PyTorch 2.14).
+
+Problemas encontrados en un Mac M5 (octubre de 2026):
+- **`fatal error: 'array' file not found`** al compilar: las Command Line Tools están a medio instalar (falta
+  la biblioteca estándar de C++ junto al compilador). Arreglo definitivo: `sudo rm -rf
+  /Library/Developer/CommandLineTools && xcode-select --install`. Mientras tanto se puede compilar con
+  `cmake -S . -B build -DCMAKE_BUILD_TYPE=Release "-DCMAKE_CXX_FLAGS=-nostdinc++ -isystem $(xcrun --show-sdk-path)/usr/include/c++/v1"`.
+- **`CERTIFICATE_VERIFY_FAILED ... self-signed certificate in certificate chain`** al descargar: hay un
+  certificado raíz propio en el llavero (antivirus o proxy) que Python no ve. Exporta los del llavero y
+  úsalos: `security find-certificate -a -p /System/Library/Keychains/SystemRootCertificates.keychain
+  /Library/Keychains/System.keychain > ~/cacerts.pem` y lanza la descarga con `SSL_CERT_FILE=~/cacerts.pem`.
 
 ## 2. Datos (una sola vez, ~7 GB de descarga, ~12 GB en disco)
 
@@ -59,7 +70,8 @@ Cuando una combinación sea mejor, se reentrenan esas mismas configuraciones con
 (`--all` en lugar de `--split ...`), se exportan y se compila:
 
 ```sh
-python tools/export_key_cnn.py fin_c2.pt fin_c4.pt fin_c4l.pt fin_sp1.pt --spec-weight 0.5
+python tools/export_key_cnn.py models/final_c2.pt models/final_c4.pt models/final_c4_long.pt \
+    models/final_spec.pt models/final_spec_w24.pt --spec-weight 0.5   # el modelo actual
 cmake --build build -j && ./build/skale_tests
 git add src/analysis/KeyCnnWeights.h && git commit -m "Nuevos pesos de las redes" && git push
 ```
