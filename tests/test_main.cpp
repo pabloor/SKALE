@@ -204,6 +204,25 @@ void testDetunedKey() {
     CHECK(a.tuningCents < 0, "afinación estimada %+.0f cents", a.tuningCents);
 }
 
+void testDoubtful() {
+    // Con un umbral mínimo siempre es dudosa y la 2ª tonalidad y su escala vienen rellenas; con 0 nunca;
+    // una progresión sintética clara no es dudosa con el umbral por defecto.
+    const auto song = synthSong(majorProgression(0), 2.0, 2);
+    AnalysisOptions o;
+    o.doubtRatio = 1e-6;
+    const SongAnalysis a = analyze(song.data(), song.size(), kRate, o);
+    CHECK(a.valid && a.doubtful, "dudosa con umbral mínimo");
+    CHECK(a.secondScaleNotes.size() == 7 && !a.secondKeyName.empty(), "2ª tonalidad: %s (%zu notas)",
+          a.secondKeyName.c_str(), a.secondScaleNotes.size());
+    CHECK(a.secondSameNotes == (a.secondKey.tonic == 9 && a.secondKey.mode == Mode::Minor), "mismas notas: %s",
+          a.secondKeyName.c_str());
+    o.doubtRatio = 0;
+    CHECK(!analyze(song.data(), song.size(), kRate, o).doubtful, "doubtRatio = 0 desactiva la duda");
+    const SongAnalysis c = analyze(song.data(), song.size(), kRate);
+    CHECK(c.valid && !c.doubtful, "Do mayor sintético claro no es dudoso (2ª %.2f, 1ª %.2f)",
+          c.candidates.size() > 1 ? double(c.candidates[1].confidence) : 0.0, double(c.candidates[0].confidence));
+}
+
 void testChords() {
     // C Am F G, 2 s cada uno, dos vueltas.
     const auto song = synthSong(majorProgression(0), 2.0, 2);
@@ -324,6 +343,7 @@ int main() {
     testFft();
     testChroma();
     testKeys();
+    testDoubtful();
     testDetunedKey();
     testChords();
     testSilence();

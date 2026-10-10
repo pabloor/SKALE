@@ -15,6 +15,8 @@ struct AnalysisOptions {
     KeyProfile profile = KeyProfile::Temperley;
     bool solfege = false;        // Do Re Mi en lugar de C D E
     std::size_t maxCandidates = 5;
+    double doubtRatio = 0.5;     // con las redes: si la 2ª tonalidad tiene al menos esta fracción de la probabilidad
+                                 // de la 1ª, el resultado es dudoso y se dan las dos (0 = nunca)
     double endingSeconds = 4;    // ventana final que se mira para desempatar la tonalidad
     double endingMargin = 1e9;   // el final solo desempata candidatas a menos de este margen
     ChromaParams chroma;         // ajustes del cromagrama
@@ -74,6 +76,14 @@ struct SongAnalysis {
     std::string keyName;
     std::vector<std::string> scaleNotes;    // 7 notas de la tonalidad elegida
     std::vector<DiatonicChord> diatonic;
+
+    // Resultado dudoso (ver AnalysisOptions::doubtRatio): la 2ª tonalidad también es probable. En la partición
+    // de prueba ocurre en ~1 de cada 4 pistas y la correcta está entre las dos mostradas el 74 % de las veces.
+    bool doubtful = false;
+    Key secondKey;
+    std::string secondKeyName;
+    bool secondSameNotes = false;            // la 2ª es la relativa: misma escala
+    std::vector<std::string> secondScaleNotes;
 
     std::vector<TimelineEntry> timeline;
     std::vector<ChordUsage> chordUsage;     // ordenado de más a menos usado

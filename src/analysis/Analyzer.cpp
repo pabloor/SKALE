@@ -200,6 +200,16 @@ SongAnalysis analyze(const float* mono, std::size_t n, double sampleRate, const 
     const Speller speller(out.key);
     for (const Note& n2 : speller.scale()) out.scaleNotes.push_back(formatNote(n2, options.solfege));
     out.diatonic = diatonicChords(out.key, options.solfege);
+    if (options.cnn && options.doubtRatio > 0 && candidates.size() > 1 &&
+        candidates[1].confidence >= float(options.doubtRatio) * candidates[0].confidence) {
+        out.doubtful = true;
+        out.secondKey = candidates[1].key;
+        out.secondKeyName = skale::keyName(out.secondKey, options.solfege);
+        const int rel = out.key.mode == Mode::Major ? 9 : 3;    // tónica de la relativa
+        out.secondSameNotes = out.secondKey.mode != out.key.mode && out.secondKey.tonic == (out.key.tonic + rel) % 12;
+        const Speller speller2(out.secondKey);
+        for (const Note& n2 : speller2.scale()) out.secondScaleNotes.push_back(formatNote(n2, options.solfege));
+    }
 
     std::map<std::pair<int, int>, ChordUsage> usage;  // (tipo, raíz)
     double chordTime = 0;

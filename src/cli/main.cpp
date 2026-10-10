@@ -13,6 +13,7 @@ void usage() {
                  "Uso: skale-cli <archivo.wav|archivo.mp3> [opciones]\n"
                  "  --json            salida en JSON\n"
                  "  --model <classic|learned>  modelo de tonalidad: ensemble (por defecto: redes + modelo lineal según --cnn-weight), cnn (solo las redes), learned (solo el lineal) o classic\n"
+                 "  --doubt <r>                dudosa (se dan dos tonalidades) si la 2ª tiene >= r veces la probabilidad de la 1ª (por defecto 0.5; 0 = nunca)\n"
                  "  --cnn-weight <w>           peso de las redes frente al lineal en ensemble (por defecto 1 = solo las redes)\n"
                  "  --spec <archivo.bin>       vuelca el espectro logarítmico por fotograma (float32 [n][216])\n"
                  "  --frames <archivo.bin>     vuelca la serie de cromagramas finos (float32, para redes)\n"
@@ -46,7 +47,12 @@ std::string jsonString(const std::string& s) {
 }
 
 void printText(const skale::SongAnalysis& a, bool timeline) {
-    std::printf("Tonalidad:  %s  (confianza %.0f%%)\n", a.keyName.c_str(), double(a.candidates[0].confidence) * 100);
+    if (a.doubtful)
+        std::printf("Tonalidad:  %s o %s  (dudosa: %.0f%% / %.0f%%%s)\n", a.keyName.c_str(), a.secondKeyName.c_str(),
+                    double(a.candidates[0].confidence) * 100, double(a.candidates[1].confidence) * 100,
+                    a.secondSameNotes ? ", mismas notas" : "");
+    else
+        std::printf("Tonalidad:  %s  (confianza %.0f%%)\n", a.keyName.c_str(), double(a.candidates[0].confidence) * 100);
     if (a.candidates.size() > 1) {
         std::printf("Alternativas:");
         for (std::size_t i = 1; i < a.candidates.size(); ++i) {
@@ -59,6 +65,10 @@ void printText(const skale::SongAnalysis& a, bool timeline) {
 
     std::printf("Escala:     ");
     for (const auto& n : a.scaleNotes) std::printf("%s ", n.c_str());
+    if (a.doubtful && !a.secondSameNotes) {
+        std::printf("\n  o, si es %s: ", a.secondKeyName.c_str());
+        for (const auto& n : a.secondScaleNotes) std::printf("%s ", n.c_str());
+    }
     std::printf("\n\nAcordes diatónicos:\n");
     for (const auto& c : a.diatonic) {
         std::printf("  %-5s %-8s %s\n", c.roman.c_str(), c.triad.c_str(), c.seventh.c_str());
@@ -84,6 +94,11 @@ void printJson(const skale::SongAnalysis& a, bool timeline) {
     std::printf("  \"key\": {\"name\": %s, \"tonic\": %d, \"mode\": \"%s\", \"confidence\": %.4f},\n",
                 jsonString(a.keyName).c_str(), a.key.tonic, a.key.mode == skale::Mode::Major ? "major" : "minor",
                 double(a.candidates[0].confidence));
+    std::printf("  \"doubtful\": %s,\n", a.doubtful ? "true" : "false");
+    if (a.doubtful)
+        std::printf("  \"secondKey\": {\"name\": %s, \"tonic\": %d, \"mode\": \"%s\", \"sameNotes\": %s},\n",
+                    jsonString(a.secondKeyName).c_str(), a.secondKey.tonic, a.secondKey.mode == skale::Mode::Major ? "major" : "minor",
+                    a.secondSameNotes ? "true" : "false");
     std::printf("  \"alternatives\": [");
     for (std::size_t i = 1; i < a.candidates.size(); ++i) {
         std::printf("%s{\"name\": %s, \"confidence\": %.4f}", i > 1 ? ", " : "",
@@ -148,6 +163,8 @@ int main(int argc, char** argv) {
             else { usage(); return 2; }
         } else if (!std::strcmp(arg, "--cnn-weight") && i + 1 < argc) {
             options.cnnWeight = std::atof(argv[++i]);
+        } else if (!std::strcmp(arg, "--doubt") && i + 1 < argc) {
+            options.doubtRatio = std::atof(argv[++i]);
         } else if (!std::strcmp(arg, "--chroma-gamma") && i + 1 < argc) {
             options.chroma.gamma = std::atof(argv[++i]);
         } else if (!std::strcmp(arg, "--chroma-min") && i + 1 < argc) {

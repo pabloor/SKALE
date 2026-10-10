@@ -139,16 +139,31 @@ void SkaleEditor::paintFile(juce::Graphics& g, juce::Rectangle<int> area) {
     }
 
     const auto& r = file_.result;
+    auto keyRow = area.removeFromTop(52);
     g.setColour(kAccent);
-    g.setFont(juce::FontOptions(40.f, juce::Font::bold));
-    g.drawText(r.keyName, area.removeFromTop(52), juce::Justification::left);
+    const juce::Font big(juce::FontOptions(40.f, juce::Font::bold));
+    g.setFont(big);
+    g.drawText(r.keyName, keyRow, juce::Justification::left);
+    if (r.doubtful) {   // dos tonalidades parecidas de probables: se dan las dos
+        keyRow.removeFromLeft(int(juce::GlyphArrangement::getStringWidth(big, r.keyName)) + 12);
+        g.setColour(kAccent.withAlpha(0.7f));
+        g.setFont(juce::FontOptions(26.f, juce::Font::bold));
+        g.drawText("o " + juce::String(r.secondKeyName), keyRow, juce::Justification::left);
+    }
 
     g.setColour(juce::Colours::white.withAlpha(0.65f));
     g.setFont(juce::FontOptions(14.f));
-    juce::String info = "Confianza " + juce::String(int((r.candidates.empty() ? 0.f : r.candidates[0].confidence) * 100.f + 0.5f)) + " %";
-    if (r.candidates.size() > 1) {
-        info += "   |   alternativas: ";
-        for (std::size_t i = 1; i < r.candidates.size() && i < 3; ++i) info += juce::String(skale::keyName(r.candidates[i].key, false)) + "  ";
+    auto pct = [](float c) { return juce::String(int(c * 100.f + 0.5f)) + " %"; };
+    juce::String info;
+    if (r.doubtful) {
+        info = "Dudosa: " + pct(r.candidates[0].confidence) + " / " + pct(r.candidates[1].confidence);
+        if (r.secondSameNotes) info += "  (mismas notas)";
+    } else {
+        info = "Confianza " + pct(r.candidates.empty() ? 0.f : r.candidates[0].confidence);
+        if (r.candidates.size() > 1) {
+            info += "   |   alternativas: ";
+            for (std::size_t i = 1; i < r.candidates.size() && i < 3; ++i) info += juce::String(skale::keyName(r.candidates[i].key, false)) + "  ";
+        }
     }
     info += juce::String::formatted("   |   %d:%02d", int(r.durationSeconds) / 60, int(r.durationSeconds) % 60);
     g.drawText(info, area.removeFromTop(20), juce::Justification::left);
@@ -159,6 +174,14 @@ void SkaleEditor::paintFile(juce::Graphics& g, juce::Rectangle<int> area) {
     juce::String scale;
     for (const auto& n : r.scaleNotes) scale += juce::String(n) + "  ";
     g.drawText("Escala:  " + scale, area.removeFromTop(26), juce::Justification::left);
+    if (r.doubtful && !r.secondSameNotes) {
+        juce::String scale2;
+        for (const auto& n : r.secondScaleNotes) scale2 += juce::String(n) + "  ";
+        g.setColour(juce::Colours::white.withAlpha(0.7f));
+        g.setFont(juce::FontOptions(14.f));
+        g.drawText("o, si es " + juce::String(r.secondKeyName) + ":  " + scale2, area.removeFromTop(20), juce::Justification::left);
+        area.removeFromTop(6);
+    }
 
     juce::String diat;
     for (const auto& d : r.diatonic) diat += juce::String(d.roman) + " " + juce::String(d.triad) + "    ";
