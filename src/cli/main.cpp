@@ -14,7 +14,8 @@ void usage() {
                  "  --json            salida en JSON\n"
                  "  --model <classic|learned>  modelo de tonalidad: ensemble (por defecto: redes + modelo lineal según --cnn-weight), cnn (solo las redes), learned (solo el lineal) o classic\n"
                  "  --doubt <r>                dudosa (se dan dos tonalidades) si la 2ª tiene >= r veces la probabilidad de la 1ª (por defecto 0.5; 0 = nunca)\n"
-                 "  --cnn-weight <w>           peso de las redes frente al lineal en ensemble (por defecto 1 = solo las redes)\n"
+                 "  --cnn-weight <w>           peso de las redes frente al lineal en ensemble, para cualquier duración\n"
+                 "                             (por defecto 1 = solo las redes por debajo de 60 s y 0.85 desde 60 s)\n"
                  "  --spec <archivo.bin>       vuelca el espectro logarítmico por fotograma (float32 [n][216])\n"
                  "  --frames <archivo.bin>     vuelca la serie de cromagramas finos (float32, para redes)\n"
                  "  --features        volcado de cromagramas y uso de acordes (JSON, para experimentos)\n"
@@ -162,7 +163,7 @@ int main(int argc, char** argv) {
             else if (!std::strcmp(mname, "cnn")) { options.cnn = true; options.learnedModel = false; }
             else { usage(); return 2; }
         } else if (!std::strcmp(arg, "--cnn-weight") && i + 1 < argc) {
-            options.cnnWeight = std::atof(argv[++i]);
+            options.cnnWeight = options.cnnWeightLong = std::atof(argv[++i]);
         } else if (!std::strcmp(arg, "--doubt") && i + 1 < argc) {
             options.doubtRatio = std::atof(argv[++i]);
         } else if (!std::strcmp(arg, "--chroma-gamma") && i + 1 < argc) {

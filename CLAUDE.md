@@ -12,8 +12,10 @@ variada) y en el total; también MIREX (`tools/eval_key_cnn.py`).
 ## Cómo analiza ahora (por defecto, `--model ensemble`)
 Log-probabilidades de 24 tonalidades = 0,5 × media de 3 redes de cromagrama entrenadas con ecualización
 aleatoria (`--eq 0.5`) + 0,5 × media de 2 redes de espectro (`src/analysis/KeyCnn.cpp`, pesos en
-`KeyCnnWeights.h`). El modelo lineal (`KeyModelWeights.h`) ya no se usa por defecto: `options.cnnWeight = 1`
-en `src/analysis/Analyzer.h` (con < 1 se mezcla; `--cnn-weight` en la CLI). Las redes son equivariantes a la
+`KeyCnnWeights.h`). Con audio de 60 s o más se mezcla 0,85 × redes + 0,15 × lineal (`KeyModelWeights.h`,
+que usa el acorde final); con menos, solo las redes (`cnnWeight`, `cnnWeightLong`, `longSeconds` en
+`src/analysis/Analyzer.h`; `--cnn-weight` en la CLI fija ambos). Si la 2ª tonalidad tiene ≥ 0,5 veces la
+probabilidad de la 1ª, el resultado es «dudoso» y se dan las dos (`doubtRatio`, `--doubt`). Las redes son equivariantes a la
 transposición. Entrada por fotograma (~0,19 s): cromagrama fino de 36 bins/octava de 4 bandas (cromagrama,
 bajo, medios, agudos) y espectro logarítmico de 216 bins.
 
@@ -31,6 +33,10 @@ bajo, medios, agudos) y espectro logarítmico de 216 bins.
 | …juego B (otras semillas) | 63,2 | 69,9 | 81,9 | 92,2 | 67,0 |
 | **Actual: juego A en C++, sin lineal** | **63,4** | 68,0 | 80,6 | 90,2 | **66,7** |
 | …con 0,15 / 0,3 de lineal | 62,3 / 61,2 | | | | 66,3 / 65,2 |
+
+Piezas completas (203: Bach, clásica, autor, Jamendo; redes y lineal entrenados sin ellas): solo redes
+82,8 %, con 0,15 de lineal **85,7 %** (escala 90,6 %, correcta entre las mostradas 92,1 %). En la partición
+fija, con la doble propuesta, la correcta está entre las mostradas el 74,2 % (FMA 71,0 %).
 
 Las filas con lineal se midieron con skale-cli (C++) y un lineal reentrenado sin la partición de prueba;
 las demás con `tools/eval_key_cnn.py` (C++ y PyTorch dan lo mismo). La mejora de las redes de espectro
