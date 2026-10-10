@@ -23,6 +23,7 @@ GROUPS = {
     'jamendo_cons': [('set4', 'expected.csv'), ('set5', 'expected.csv')],
     'folk_synth': [('set3', 'expected.csv')],
     'synth': [('synth', 'expected.csv')],
+    'fma_user': [('fma_user', 'expected.csv')],   # etiquetas a mano (tools/etiquetar.py); siempre de entrenamiento
 }
 PC = {'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11}
 

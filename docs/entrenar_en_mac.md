@@ -64,6 +64,23 @@ python tools/eval_key_cnn.py $D/frames4/manifest.json $D/frames4 --spec $D/spec 
 Referencia (CPU, misma partición): una red de espectro sola da FMA 61,5 % y 65,2 % en total; las tres
 de cromagrama juntas, FMA 60,7 % y 64,7 %.
 
+## Etiquetar más pistas a mano (opcional)
+
+Más música real etiquetada es lo que más puede mejorar las redes. Con las pistas de FMA que no están en FMAK:
+
+```sh
+# fma_small (8.000 fragmentos, 7,7 GB) y metadatos de https://github.com/mdeff/fma, en ~/skale-datos/fma_pool
+# (los zip necesitan Python para descomprimirse: el unzip de macOS no admite su compresión)
+python tools/label_pool.py ~/skale-datos           # analiza y ordena: primero las dudosas, géneros alternos
+python tools/etiquetar.py ~/skale-datos            # abre http://127.0.0.1:8765
+```
+
+En la página se escucha cada fragmento y se elige entre las 3 propuestas del modelo (en orden aleatorio), otra
+tonalidad, «sin tonalidad clara» o saltar; «Cadencia» toca I–IV–V–I en esa tonalidad sobre la música. Una de
+cada 20 pistas es de FMAK, sin avisar, para medir la coincidencia con los expertos. Las etiquetas van a
+`~/skale-datos/fma_user/expected.csv` y `prepare_training.py` las incluye como grupo `fma_user` (solo
+entrenamiento: la partición de prueba no cambia).
+
 ## 4. Modelo final y exportación
 
 Cuando una combinación sea mejor, se reentrenan esas mismas configuraciones con todos los datos
