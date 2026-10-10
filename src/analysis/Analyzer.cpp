@@ -168,7 +168,7 @@ SongAnalysis analyze(const float* mono, std::size_t n, double sampleRate, const 
     std::vector<KeyCandidate> cnnCandidates;
     if (options.cnn) {
         auto lp = cnnKeyLogProbs(out.frames);
-        if (options.learnedModel) {   // combinación con el modelo lineal
+        if (options.learnedModel && options.cnnWeight < 1.0) {   // combinación con el modelo lineal (no se calcula si su peso es 0)
             const auto lin = KeyDetector::learnedLogProbs(out.chroma, out.bassChroma, options.endingSeconds > 0 ? &out.endingChroma : nullptr, &votes);
             for (std::size_t i = 0; i < 24; ++i) lp[i] = float(options.cnnWeight) * lp[i] + float(1.0 - options.cnnWeight) * lin[i];
         }

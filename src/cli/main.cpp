@@ -12,8 +12,8 @@ void usage() {
     std::fprintf(stderr,
                  "Uso: skale-cli <archivo.wav|archivo.mp3> [opciones]\n"
                  "  --json            salida en JSON\n"
-                 "  --model <classic|learned>  modelo de tonalidad: ensemble (por defecto: red + modelo lineal), cnn (solo la red), learned (solo el lineal) o classic\n"
-                 "  --cnn-weight <w>           peso de las redes frente al lineal en ensemble (por defecto 0.85)\n"
+                 "  --model <classic|learned>  modelo de tonalidad: ensemble (por defecto: redes + modelo lineal según --cnn-weight), cnn (solo las redes), learned (solo el lineal) o classic\n"
+                 "  --cnn-weight <w>           peso de las redes frente al lineal en ensemble (por defecto 1 = solo las redes)\n"
                  "  --spec <archivo.bin>       vuelca el espectro logarítmico por fotograma (float32 [n][216])\n"
                  "  --frames <archivo.bin>     vuelca la serie de cromagramas finos (float32, para redes)\n"
                  "  --features        volcado de cromagramas y uso de acordes (JSON, para experimentos)\n"

@@ -98,6 +98,21 @@ def crop(x, T, rng):
     s = rng.integers(0, n - T + 1); return x[s:s + T]
 
 
+def random_eq(xs, rng, spec):
+    """Ecualización aleatoria (aumento). Espectro: curva suave de ±6 dB en magnitud sobre las 6 octavas, con la
+    misma normalización por fotograma que skale-cli (máximo = 3 tras el escalado). Cromagramas: ganancia de
+    cada banda (bajo, medios, agudos) entre 0,6 y 1,6 frente al cromagrama completo."""
+    if spec:
+        f = np.linspace(0, np.pi, xs.shape[3])
+        db = sum(rng.uniform(-1, 1) * np.cos(k * f + rng.uniform(0, np.pi)) for k in (1, 2, 3)) * 6 / 3
+        g = torch.from_numpy((10 ** (db / 20)) ** 0.5).float()          # el espectro guardado es sqrt(magnitud)
+        xs = xs * g
+        return xs / xs.amax(3, keepdim=True).clamp_min(1e-6) * 3.0
+    g = torch.ones(1, xs.shape[1], 1, 1)
+    for c in range(1, xs.shape[1]): g[0, c] = float(rng.uniform(0.6, 1.6))
+    return xs * g
+
+
 def pick_device(name='auto'):
     if name != 'auto': return torch.device(name)
     if torch.cuda.is_available(): return torch.device('cuda')
@@ -127,6 +142,8 @@ def main():
     ap.add_argument('--train-only', default='', help='grupos que van siempre a entrenamiento (p. ej. pseudoetiquetas)')
     ap.add_argument('--group-scale', default='', help='factor de muestreo por grupo, p. ej. pseudo=0.5')
     ap.add_argument('--spec', default='', help='carpeta con espectros logarítmicos (skale-cli --spec): usa KeyNetSpec')
+    ap.add_argument('--init', default='', help='parte de los pesos de otro modelo (.pt de la misma arquitectura), p. ej. preentrenado')
+    ap.add_argument('--eq', type=float, default=0.0, help='probabilidad de ecualización aleatoria por lote (aumento; 0 = no)')
     ap.add_argument('--all', action='store_true', help='entrena con todos los datos (modelo final, sin conjunto de prueba)')
     ap.add_argument('--seed', type=int, default=0); ap.add_argument('--holdout', default='', help='grupos completos fuera del entrenamiento (coma)')
     ap.add_argument('--split', default='', help='JSON con la lista [grupo, nombre] de prueba (p. ej. tools/samples/test_split.json); '
@@ -156,6 +173,7 @@ def main():
     cfg = dict(ch=a.ch, hidden=a.hidden, drop=a.drop, in_ch=in_ch, layers=a.layers, crop=a.crop)
     model = KeyNetSpec(ch=a.ch, hidden=a.hidden, drop=a.drop) if a.spec else KeyNet(ch=a.ch, hidden=a.hidden, drop=a.drop, in_ch=in_ch, layers=a.layers)
     if a.spec: cfg['spec'] = True
+    if a.init: model.load_state_dict(torch.load(a.init, map_location='cpu', weights_only=False)['state'])
     model.to(dev)
     opt = torch.optim.AdamW(model.parameters(), lr=2e-3, weight_decay=1e-2)
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=a.lr, total_steps=a.epochs * a.steps)
@@ -174,6 +192,7 @@ def main():
             xs = torch.roll(xs, int(rng.integers(-1, 2)), dims=3)
             if a.spec and rng.random() < 0.5:   # además, transposición de ±1-2 semitonos (en el espectro no es circular)
                 k = int(rng.choice([-6, -3, 3, 6])); xs = torch.roll(xs, k, dims=3); ys = ((ys // 2 + k // 3) % 12) * 2 + ys % 2
+            if a.eq and rng.random() < a.eq: xs = random_eq(xs, rng, a.spec)
             loss = F.cross_entropy(model(xs.to(dev)), torch.from_numpy(ys).long().to(dev), label_smoothing=0.05)
             opt.zero_grad(); loss.backward(); opt.step(); sched.step(); loss_sum += loss.item()
         msg = f'época {ep + 1}/{a.epochs}  pérdida {loss_sum / a.steps:.3f}  {time.time() - t0:.0f}s'

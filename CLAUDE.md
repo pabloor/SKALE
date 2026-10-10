@@ -10,12 +10,12 @@ GuitarSet 72, GiantSteps+ 51, resto pequeños). Métrica principal: acierto exac
 variada) y en el total; también MIREX (`tools/eval_key_cnn.py`).
 
 ## Cómo analiza ahora (por defecto, `--model ensemble`)
-Log-probabilidades de 24 tonalidades = 0,85 × redes + 0,15 × modelo lineal (`KeyModelWeights.h`;
-`options.cnnWeight` en `src/analysis/Analyzer.h`, `--cnn-weight` en la CLI). Redes = 0,5 × media de 3 redes
-de cromagrama + 0,5 × media de 2 redes de espectro (`src/analysis/KeyCnn.cpp`, pesos en `KeyCnnWeights.h`).
-Las redes son equivariantes a la transposición. Entrada por fotograma (~0,19 s): cromagrama fino de
-36 bins/octava de 4 bandas (cromagrama, bajo, medios, agudos) y espectro logarítmico de 216 bins.
-Coste: ≈ 7 s para una pieza de 5,7 min en un M5 (3,5 s con el modelo anterior de 3 redes).
+Log-probabilidades de 24 tonalidades = 0,5 × media de 3 redes de cromagrama entrenadas con ecualización
+aleatoria (`--eq 0.5`) + 0,5 × media de 2 redes de espectro (`src/analysis/KeyCnn.cpp`, pesos en
+`KeyCnnWeights.h`). El modelo lineal (`KeyModelWeights.h`) ya no se usa por defecto: `options.cnnWeight = 1`
+en `src/analysis/Analyzer.h` (con < 1 se mezcla; `--cnn-weight` en la CLI). Las redes son equivariantes a la
+transposición. Entrada por fotograma (~0,19 s): cromagrama fino de 36 bins/octava de 4 bandas (cromagrama,
+bajo, medios, agudos) y espectro logarítmico de 216 bins.
 
 ## Resultados en la partición fija (acierto exacto, 1.497 pistas disponibles)
 | Modelo | FMA | Beatport | GuitarSet | GS+ | Total |
@@ -26,23 +26,31 @@ Coste: ≈ 7 s para una pieza de 5,7 min en un M5 (3,5 s con el modelo anterior 
 | Una red de espectro sola (6 semillas/anchuras) | 59,5–61,5 | 63–69 | 75–79 | 88–94 | 63,1–65,2 |
 | 3 cromagrama + 2 espectro (`split_spec`, `split_spec_w24`), sin lineal | 62,2 | 68,9 | 83,3 | 92,2 | 66,2 |
 | …con otras 4 redes de espectro (semillas nuevas), sin lineal | 62,4 | 69,4 | 83,3 | 90,2 | 66,3 |
-| **Actual: 0,85 × (3 cromagrama + 2 espectro) + 0,15 × lineal** | 62,6 | 70,3 | 84,7 | 88,2 | 66,7 |
-| …con 0,3 de lineal | 60,9 | 69,9 | 81,9 | 88,2 | 65,3 |
+| Anterior: 0,85 × (3 cromagrama + 2 espectro) + 0,15 × lineal | 62,6 | 70,3 | 84,7 | 88,2 | 66,7 |
+| 3 cromagrama **con ecualización** (juego A) + 2 espectro, sin lineal | 63,4 | 68,0 | 80,6 | 90,2 | 66,7 |
+| …juego B (otras semillas) | 63,2 | 69,9 | 81,9 | 92,2 | 67,0 |
+| **Actual: juego A en C++, sin lineal** | **63,4** | 68,0 | 80,6 | 90,2 | **66,7** |
+| …con 0,15 / 0,3 de lineal | 62,3 / 61,2 | | | | 66,3 / 65,2 |
 
 Las filas con lineal se midieron con skale-cli (C++) y un lineal reentrenado sin la partición de prueba;
 las demás con `tools/eval_key_cnn.py` (C++ y PyTorch dan lo mismo). La mejora de las redes de espectro
-(+1,7 FMA) se confirmó con dos juegos de semillas; el lineal a 0,15 da +0,4 (ruido, pero no resta).
+(+1,7 FMA) y la de la ecualización de las redes de cromagrama (+1,0 FMA frente a las mismas redes sin
+ecualizar) se confirmaron con dos juegos de semillas. Con la ecualización el lineal resta y se quitó.
 
 ## Siguiente paso
-Ideas sin probar: más redes **distintas** (p. ej. espectro con ventana larga o de 4 bandas); reducir coste
-(la red de espectro ancha es la más lenta); comprobar el plugin (`build-plugin`) con los nuevos pesos.
+En marcha: datos sintéticos de Lakh MIDI (`tools/gen_lakh.py`: 16.941 fragmentos de 30 s con la armadura y
+la tonalidad de las notas de acuerdo, sintetizados con 3 bancos de sonidos libres en `~/skale-datos/soundfonts`;
+las redes actuales aciertan el 95 % de ellos). Probar: mezclarlos con `--group-scale lakh=...` y preentrenar con
+ellos y ajustar después con `--init`. Otras ideas: una red con cromagrama y espectro a la vez.
 
 ## Modelos entrenados (`models/`, formato {'state','cfg'})
-- `final_c2.pt`, `final_c4.pt`, `final_c4_long.pt`: las 3 redes de cromagrama de producción (todos los datos).
+- `final_c2.pt`, `final_c4.pt`, `final_c4_long.pt`: las 3 redes de cromagrama anteriores, sin ecualización.
+- `final_c2_eq.pt`, `final_c4_eq.pt`, `final_c4_long_eq.pt`: las 3 redes de cromagrama de producción
+  (ecualización aleatoria, todos los datos; mismas opciones que las sin `_eq` más `--eq 0.5`).
 - `final_spec.pt`, `final_spec_w24.pt`: las 2 redes de espectro de producción (todos los datos, anchura 16 y 24).
-  Exportar las 5: `tools/export_key_cnn.py models/final_c2.pt models/final_c4.pt models/final_c4_long.pt
-  models/final_spec.pt models/final_spec_w24.pt --spec-weight 0.5`.
-- `split_*.pt`: entrenadas sin la partición de prueba, para comparar (`split_c2`, `split_c4`,
+  Exportar las 5: `tools/export_key_cnn.py models/final_c2_eq.pt models/final_c4_eq.pt
+  models/final_c4_long_eq.pt models/final_spec.pt models/final_spec_w24.pt --spec-weight 0.5`.
+- `split_*.pt` (y `split_*_eq.pt`): entrenadas sin la partición de prueba, para comparar (`split_c2`, `split_c4`,
   `split_c4_long`, `split_spec`, `split_spec_w24`).
 
 ## Datos y entrenamiento
@@ -58,10 +66,11 @@ red de espectro ancha `--ch 24`.
 Parámetros del cromagrama; cromagrama del inicio y cadencias; árboles de gradiente; más datos del
 dominio para el lineal; redes de cromagrama más anchas o profundas; aumentos en prueba (TTA);
 corrección del sesgo mayor/menor; autoentrenamiento con 20.000 pistas FMA sin etiquetar
-(los alumnos igualan al conjunto, no lo superan). Lo que sí funcionó: promediar redes **distintas**.
+(los alumnos igualan al conjunto, no lo superan). Lo que sí funcionó: promediar redes **distintas**. Entrenar más
+(100 épocas: sobreajusta); red de espectro con ventana de ~48 s; ecualización en las redes de espectro.
+Pixabay y ccMixter bloquean el acceso automático (403 y `robots.txt`): no usarlos.
 
 ## Normas
 - No descargar música comercial o con derechos; solo conjuntos con licencia abierta o de investigación.
-  Pixabay bloquea el acceso automático y no tiene API de música; el usuario paró la descarga de ccMixter.
 - Commits en `main`. Los pesos van compilados en el binario (sin archivos externos).
 - Licencia de JUCE: AGPL o comercial; para distribuir el plugin cerrado hace falta la comercial.

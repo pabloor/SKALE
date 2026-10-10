@@ -21,7 +21,7 @@ struct AnalysisOptions {
     bool keepFrames = false;     // guarda la serie de cromagramas finos (para entrenar redes)
     double windowSeconds = 8;    // ventanas del voto por ventanas (paso = la mitad)
     bool cnn = true;             // combina la red convolucional con el modelo aprendido (cnnWeight); si learnedModel es false solo la red
-    double cnnWeight = 0.85;     // peso de la red en la combinación de log-probabilidades (el resto es del modelo lineal)
+    double cnnWeight = 1.0;      // peso de las redes frente al modelo lineal (1 = solo las redes; con las redes actuales el lineal no aporta)
     bool learnedModel = true;    // modelo de tonalidad aprendido (ignora perfil y pesos de bajo/final); false = clásico
     double bassWeight = 1;       // peso del bajo (tónica y quinta) en la tonalidad; 0 = off
     double chordWeight = 0;      // peso de los acordes detectados (diatónicos y de tónica); 0 = off
