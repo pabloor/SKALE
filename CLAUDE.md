@@ -75,9 +75,14 @@ corrección del sesgo mayor/menor; autoentrenamiento con 20.000 pistas FMA sin e
 (100 épocas: sobreajusta); red de espectro con ventana de ~48 s; ecualización en las redes de espectro.
 Datos sintéticos de Lakh MIDI (`tools/gen_lakh.py`, 16.941 fragmentos; características en `~/skale-train`
 con `frames4/manifest_lakh.json`): ni mezclados (`--group-scale lakh=0.5`) ni como preentrenamiento
-(`--init`) mejoran el conjunto con dos semillas. Pixabay y ccMixter bloquean el acceso automático (403 y `robots.txt`): no usarlos.
+(`--init`) mejoran el conjunto con dos semillas. Etiquetar FMA con detectores externos: en la partición fija
+nuestro modelo supera a Essentia (5 perfiles, mejor 54,6 % en FMA) y a madmom (CNN de tonalidad, 56,1 % en
+FMA; 78,5 % en Beatport, probablemente visto al entrenar); cuando discrepan de nosotros en FMA aciertan menos
+que nosotros, así que sus etiquetas no sirven. Pixabay y ccMixter bloquean el acceso automático (403 y `robots.txt`): no usarlos.
 
 ## Normas
 - No descargar música comercial o con derechos; solo conjuntos con licencia abierta o de investigación.
 - Commits en `main`. Los pesos van compilados en el binario (sin archivos externos).
-- Licencia de JUCE: AGPL o comercial; para distribuir el plugin cerrado hace falta la comercial.
+- El proyecto no es de pago (octubre de 2026): se pueden usar datos y modelos de licencia no comercial para
+  entrenar. Herramientas externas (madmom, Essentia) solo para contrastar resultados, sin añadir su código.
+- Licencia de JUCE: AGPL o comercial; sin la comercial, el plugin distribuido tiene que ser AGPL (código abierto).
