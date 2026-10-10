@@ -38,10 +38,9 @@ las demás con `tools/eval_key_cnn.py` (C++ y PyTorch dan lo mismo). La mejora d
 ecualizar) se confirmaron con dos juegos de semillas. Con la ecualización el lineal resta y se quitó.
 
 ## Siguiente paso
-En marcha: datos sintéticos de Lakh MIDI (`tools/gen_lakh.py`: 16.941 fragmentos de 30 s con la armadura y
-la tonalidad de las notas de acuerdo, sintetizados con 3 bancos de sonidos libres en `~/skale-datos/soundfonts`;
-las redes actuales aciertan el 95 % de ellos). Probar: mezclarlos con `--group-scale lakh=...` y preentrenar con
-ellos y ajustar después con `--init`. Otras ideas: una red con cromagrama y espectro a la vez.
+Ideas sin probar: una red con cromagrama y espectro a la vez; ecualización con otras intensidades o
+también en tiempo (volumen por fotograma). El límite parece ser la cantidad de datos reales etiquetados
+(entrenar más sobreajusta; los datos sintéticos de Lakh no ayudan).
 
 ## Modelos entrenados (`models/`, formato {'state','cfg'})
 - `final_c2.pt`, `final_c4.pt`, `final_c4_long.pt`: las 3 redes de cromagrama anteriores, sin ecualización.
@@ -68,7 +67,9 @@ dominio para el lineal; redes de cromagrama más anchas o profundas; aumentos en
 corrección del sesgo mayor/menor; autoentrenamiento con 20.000 pistas FMA sin etiquetar
 (los alumnos igualan al conjunto, no lo superan). Lo que sí funcionó: promediar redes **distintas**. Entrenar más
 (100 épocas: sobreajusta); red de espectro con ventana de ~48 s; ecualización en las redes de espectro.
-Pixabay y ccMixter bloquean el acceso automático (403 y `robots.txt`): no usarlos.
+Datos sintéticos de Lakh MIDI (`tools/gen_lakh.py`, 16.941 fragmentos; características en `~/skale-train`
+con `frames4/manifest_lakh.json`): ni mezclados (`--group-scale lakh=0.5`) ni como preentrenamiento
+(`--init`) mejoran el conjunto con dos semillas. Pixabay y ccMixter bloquean el acceso automático (403 y `robots.txt`): no usarlos.
 
 ## Normas
 - No descargar música comercial o con derechos; solo conjuntos con licencia abierta o de investigación.
