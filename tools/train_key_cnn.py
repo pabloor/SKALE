@@ -142,6 +142,7 @@ def main():
     ap.add_argument('--train-only', default='', help='grupos que van siempre a entrenamiento (p. ej. pseudoetiquetas)')
     ap.add_argument('--group-scale', default='', help='factor de muestreo por grupo, p. ej. pseudo=0.5')
     ap.add_argument('--spec', default='', help='carpeta con espectros logarítmicos (skale-cli --spec): usa KeyNetSpec')
+    ap.add_argument('--eval-only', default='gtzan', help='grupos que nunca se usan para entrenar, ni con --all (solo evaluación)')
     ap.add_argument('--init', default='', help='parte de los pesos de otro modelo (.pt de la misma arquitectura), p. ej. preentrenado')
     ap.add_argument('--eq', type=float, default=0.0, help='probabilidad de ecualización aleatoria por lote (aumento; 0 = no)')
     ap.add_argument('--all', action='store_true', help='entrena con todos los datos (modelo final, sin conjunto de prueba)')
@@ -154,6 +155,7 @@ def main():
     dev = pick_device(a.device); print('dispositivo', dev, flush=True)
     in_ch = a.use_channels or a.channels
     data = load(a.manifest, a.frames, a.channels, in_ch, a.spec or None)
+    data = [d for d in data if d['group'] not in set(filter(None, a.eval_only.split(',')))]
     hold = set(filter(None, a.holdout.split(',')))
     idx = np.arange(len(data)); te = np.zeros(len(data), bool); srng = np.random.default_rng(12345)   # partición fija e independiente de la semilla
     for g in sorted({d['group'] for d in data}):

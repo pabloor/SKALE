@@ -12,7 +12,7 @@ import numpy as np, torch
 
 spec = importlib.util.spec_from_file_location('tkc', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'train_key_cnn.py'))
 tkc = importlib.util.module_from_spec(spec); spec.loader.exec_module(tkc)
-GROUPS = ['fma', 'beatport', 'guitarset', 'gsplus']
+GROUPS = ['fma', 'beatport', 'guitarset', 'gsplus', 'gtzan']
 
 
 def mirex(p, y):

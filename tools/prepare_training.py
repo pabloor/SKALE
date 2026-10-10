@@ -24,6 +24,7 @@ GROUPS = {
     'folk_synth': [('set3', 'expected.csv')],
     'synth': [('synth', 'expected.csv')],
     'fma_user': [('fma_user', 'expected.csv')],   # etiquetas a mano (tools/etiquetar.py); siempre de entrenamiento
+    'gtzan': [('gtzan', 'expected.csv')],         # GTZAN (837 con tonalidad): solo evaluación, train_key_cnn.py lo excluye
 }
 PC = {'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11}
 

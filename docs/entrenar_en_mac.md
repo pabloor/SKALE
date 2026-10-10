@@ -61,6 +61,10 @@ python tools/train_key_cnn.py $D/frames4/manifest.json $D/frames4 --channels 4 -
 python tools/eval_key_cnn.py $D/frames4/manifest.json $D/frames4 --spec $D/spec c2.pt c4.pt c4l.pt sp1.pt
 ```
 
+Con música comercial que las redes nunca ven (GTZAN, solo evaluación: `python tools/fetch_datasets.py
+~/skale-datos --solo gtzan`, luego `prepare_training.py` otra vez):
+`python tools/eval_key_cnn.py ... --split tools/samples/test_split_gtzan.json modelos.pt`.
+
 Referencia (CPU, misma partición): una red de espectro sola da FMA 61,5 % y 65,2 % en total; las tres
 de cromagrama juntas, FMA 60,7 % y 64,7 %.
 

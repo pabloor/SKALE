@@ -19,6 +19,15 @@ probabilidad de la 1ª, el resultado es «dudoso» y se dan las dos (`doubtRatio
 transposición. Entrada por fotograma (~0,19 s): cromagrama fino de 36 bins/octava de 4 bandas (cromagrama,
 bajo, medios, agudos) y espectro logarítmico de 216 bins.
 
+## Prueba con música comercial: GTZAN (solo evaluación)
+837 fragmentos de 30 s de GTZAN con la tonalidad de Lerch (`tools/fetch_datasets.py --solo gtzan`, lista en
+`tools/samples/gtzan_expected.csv`). `train_key_cnn.py` lo excluye siempre (`--eval-only gtzan`, también con
+`--all`). Evaluar: `tools/eval_key_cnn.py ... --split tools/samples/test_split_gtzan.json` (partición fija +
+todo GTZAN). Modelo actual: 68,0 % con las redes `split_*` (skale-cli: 68,6 %; pop 83, country 87, reggae 88,
+rock 74, metal 72, hip hop 56, jazz 46, blues 36: el 97 % del blues está anotado como menor y el modelo suele
+decir la misma tónica en mayor). Entrenar con 585 de GTZAN dio +1,6 en las otras 252 (ruido): se decidió
+dejarlo como prueba independiente.
+
 ## Resultados en la partición fija (acierto exacto, 1.497 pistas disponibles)
 | Modelo | FMA | Beatport | GuitarSet | GS+ | Total |
 |---|---|---|---|---|---|
@@ -73,7 +82,8 @@ dominio para el lineal; redes de cromagrama más anchas o profundas; aumentos en
 corrección del sesgo mayor/menor; autoentrenamiento con 20.000 pistas FMA sin etiquetar
 (los alumnos igualan al conjunto, no lo superan). Lo que sí funcionó: promediar redes **distintas**. Entrenar más
 (100 épocas: sobreajusta); red de espectro con ventana de ~48 s; ecualización en las redes de espectro.
-Datos sintéticos de Lakh MIDI (`tools/gen_lakh.py`, 16.941 fragmentos; características en `~/skale-train`
+MERT-v1-95M como profesor (media temporal por capa + clasificador, 30 s centrales): 52,8 % en FMA
+frente a 63,4 % nuestro; mezclado con peso 0,15, +0,4 (ruido). No sirve. Datos sintéticos de Lakh MIDI (`tools/gen_lakh.py`, 16.941 fragmentos; características en `~/skale-train`
 con `frames4/manifest_lakh.json`): ni mezclados (`--group-scale lakh=0.5`) ni como preentrenamiento
 (`--init`) mejoran el conjunto con dos semillas. Etiquetar FMA con detectores externos: en la partición fija
 nuestro modelo supera a Essentia (5 perfiles, mejor 54,6 % en FMA) y a madmom (CNN de tonalidad, 56,1 % en
@@ -81,7 +91,9 @@ FMA; 78,5 % en Beatport, probablemente visto al entrenar); cuando discrepan de n
 que nosotros, así que sus etiquetas no sirven. Pixabay y ccMixter bloquean el acceso automático (403 y `robots.txt`): no usarlos.
 
 ## Normas
-- No descargar música comercial o con derechos; solo conjuntos con licencia abierta o de investigación.
+- Música: conjuntos con licencia abierta y conjuntos de investigación publicados (también con audio comercial,
+  como GTZAN o Beatport EDM Key), solo para entrenar y evaluar, nunca para redistribuir el audio. No descargar
+  de sitios que lo bloquean (Pixabay, ccMixter) ni de YouTube.
 - Commits en `main`. Los pesos van compilados en el binario (sin archivos externos).
 - El proyecto no es de pago (octubre de 2026): se pueden usar datos y modelos de licencia no comercial para
   entrenar. Herramientas externas (madmom, Essentia) solo para contrastar resultados, sin añadir su código.

@@ -15,6 +15,7 @@ Conjuntos (carpeta dentro de DATOS, tamaño aproximado de la descarga):
   set2, set6 piezas CC con la tonalidad en el título del autor, archive.org (grupo «author»)
   set4, set5 Jamendo CC con etiqueta por consenso de varios detectores, archive.org (grupo «jamendo_cons»)
   synth      108 progresiones sintéticas generadas aquí (tools/gen_synth_training.py)
+  gtzan      GTZAN, 837 fragmentos de 30 s con tonalidad (Lerch), Hugging Face (~1,2 GB): solo para evaluar
 El grupo «folk_synth» (29 melodías de music21 sintetizadas) no se descarga: necesita music21 y fluidsynth
 (tools/render_corpus.py); son pocas pistas y el entrenamiento funciona sin ellas.
 
@@ -127,13 +128,27 @@ def fetch_set5(d):
     from_tsv(d, 'jamendo2_consensus_sources.tsv', 'jamendo2_consensus_expected.csv', lambda r, p: ia_first_mp3(r[1], p, 1_500_000, 14_000_000))
 
 
+def fetch_gtzan(d):
+    """GTZAN (audio comercial distribuido para investigación) con las tonalidades de Lerch (MIT,
+    github.com/audiocontentanalysis/dataset-gtzan-key). Solo para evaluar: train_key_cnn.py no lo usa."""
+    if not os.path.isdir(f'{d}/genres'):
+        os.makedirs(d, exist_ok=True); tgz = f'{d}/genres.tar.gz'
+        print('descargando GTZAN (1,2 GB, Hugging Face marsyas/gtzan)...', flush=True)
+        if not get('https://huggingface.co/datasets/marsyas/gtzan/resolve/main/data/genres.tar.gz', tgz): raise SystemExit('no se pudo descargar GTZAN')
+        import tarfile
+        with tarfile.open(tgz) as tf: tf.extractall(d, filter='data')
+        os.remove(tgz)
+    copy_csv('gtzan_expected.csv', f'{d}/expected.csv')
+
+
 def fetch_synth(d):
     os.makedirs(d, exist_ok=True)
     if not os.path.exists(f'{d}/expected.csv'): subprocess.run([sys.executable, os.path.join(HERE, 'gen_synth_training.py'), d], check=True)
 
 
 SETS = dict(synth=fetch_synth, bach=fetch_bach, classic=fetch_classic, set2=fetch_set2, set6=fetch_set6, set4=fetch_set4,
-            set5=fetch_set5, guitarset=fetch_guitarset, gsplus=fetch_gsplus, beatport=fetch_beatport, fma=fetch_fma)
+            set5=fetch_set5, guitarset=fetch_guitarset, gsplus=fetch_gsplus, beatport=fetch_beatport, fma=fetch_fma,
+            gtzan=fetch_gtzan)
 
 
 def main():
