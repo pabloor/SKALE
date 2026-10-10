@@ -53,9 +53,14 @@ las demás con `tools/eval_key_cnn.py` (C++ y PyTorch dan lo mismo). La mejora d
 ecualizar) se confirmaron con dos juegos de semillas. Con la ecualización el lineal resta y se quitó.
 
 ## Siguiente paso
-Ideas sin probar: una red con cromagrama y espectro a la vez; ecualización con otras intensidades o
-también en tiempo (volumen por fotograma). El límite parece ser la cantidad de datos reales etiquetados
-(entrenar más sobreajusta; los datos sintéticos de Lakh no ayudan).
+Pendiente (el usuario lo aplazó): **separar percusión y armonía (HPSS) antes del cromagrama y del espectro**,
+en el analizador en C++. Plan: implementarlo con tests, recalcular características (`prepare_training.py`),
+entrenar las 5 redes con `--split tools/samples/test_split_gtzan.json` y comparar con las `split_*` actuales
+en FMA y GTZAN (≈ 2 h hasta saber si sirve); si mejora, confirmar con otras semillas y pasar a producción
+(≈ 1,5 h más). Medir también el coste en tiempo de análisis. Esperado: 0 a +1 punto.
+Otras ideas sin probar: una red con cromagrama y espectro a la vez. El límite parece ser la cantidad de datos
+reales etiquetados: la página `tools/etiquetar.py` está lista (7.389 pistas de FMA en `~/skale-datos/fma_user`)
+si alguien con buen oído puede etiquetar.
 
 ## Modelos entrenados (`models/`, formato {'state','cfg'})
 - `final_c2.pt`, `final_c4.pt`, `final_c4_long.pt`: las 3 redes de cromagrama anteriores, sin ecualización.
