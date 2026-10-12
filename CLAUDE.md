@@ -66,9 +66,9 @@ las demás con `tools/eval_key_cnn.py` (C++ y PyTorch dan lo mismo). La mejora d
 ecualizar) se confirmaron con dos juegos de semillas. Con la ecualización el lineal resta y se quitó.
 
 ## Siguiente paso
-Todas las ideas pendientes están probadas (ver abajo); todo apunta a que el límite es la cantidad de datos
-reales etiquetados: la página `tools/etiquetar.py` está lista (7.389 pistas
-de FMA en `~/skale-datos/fma_user`) si alguien con buen oído puede etiquetar.
+Todas las ideas probadas (ver abajo). Con los datos abiertos disponibles el modelo está en su límite; lo único
+con margen es más música real etiquetada a mano: la página `tools/etiquetar.py` está lista (7.389 pistas de
+FMA en `~/skale-datos/fma_user`) si alguien con buen oído puede etiquetar.
 
 ## Modelos entrenados (`models/`, formato {'state','cfg'})
 - **Producción:** `final_c2_full.pt`, `final_c4_full.pt`, `final_c4_long_full.pt`, `final_spec_full.pt`,
@@ -117,7 +117,10 @@ anotadores de acuerdo) 63,0 / 68,9 / 69,7; MusicNet (`tools/get_musicnet_keys.py
 tonalidad del título comprobada con las notas; el modelo ya acertaba el 92,5 %) 63,0 / 69,2 / 70,1; AAM
 (`tools/get_aam.py`, 2.705 tramos sintéticos de una tonalidad) 63,3 / 69,9 / 69,9 y GuitarSet −5,6. Ninguno
 mejora. Sumar dos juegos de semillas (10 redes) y otras formas de combinar las ventanas (por confianza, más
-peso al final) tampoco: ±0,4 en FMA completas. Pixabay y ccMixter bloquean el acceso automático (403 y `robots.txt`): no usarlos.
+peso al final) tampoco: ±0,4 en FMA completas. Preentrenamiento autosupervisado (`train_key_cnn.py --ssl`, IIC entre dos trozos de la misma pista con
+desafinación, ecualización y transposición; 24.625 fragmentos de fma_medium, `manifest_unlabeled.json`) y
+ajuste con `--init`: cada red pierde 1-5 puntos y la de espectro ancha se rompe (FMA 59,3 / GTZAN 67,3 frente
+a 63,6 / 69,5). La transposición ya la cumplen las redes por construcción; agrupar trozos no es la tonalidad. Pixabay y ccMixter bloquean el acceso automático (403 y `robots.txt`): no usarlos.
 
 ## Normas
 - Música: conjuntos con licencia abierta y conjuntos de investigación publicados (también con audio comercial,

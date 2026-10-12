@@ -182,6 +182,38 @@ def predict(model, x, T=128):
         return F.log_softmax(model(b.to(dev)), 1).mean(0).cpu().numpy()
 
 
+def iic_loss(p1, p2, eps=1e-8):
+    """Information Invariant Clustering: máxima información mutua entre las predicciones de dos vistas
+    (evita el colapso porque obliga a usar todas las clases)."""
+    P = (p1.unsqueeze(2) * p2.unsqueeze(1)).mean(0); P = ((P + P.t()) / 2).clamp_min(eps)
+    Pi = P.sum(1, keepdim=True); Pj = P.sum(0, keepdim=True)
+    return -(P * (P.log() - Pi.log() - Pj.log())).sum()
+
+
+def ssl_pretrain(a, model, data, dev, rng):
+    """Dos trozos distintos de la misma pista, con desafinación, ecualización y transposición al azar (que se
+    deshace en la predicción): misma tonalidad. Sin etiquetas."""
+    opt = torch.optim.AdamW(model.parameters(), lr=2e-3, weight_decay=1e-2)
+    sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=a.lr, total_steps=a.epochs * a.steps)
+    for ep in range(a.epochs):
+        model.train(); t0 = time.time(); tot = 0
+        for _ in range(a.steps):
+            bi = rng.choice(len(data), a.batch)
+            views, shifts = [], []
+            for v in range(2):
+                xs = torch.from_numpy(np.stack([crop(data[j]['x'], a.crop, rng) for j in bi])).permute(0, 2, 1, 3)
+                xs = torch.roll(xs, int(rng.integers(-1, 2)), dims=3)
+                k = int(rng.choice([-6, -3, 0, 3, 6])) if v == 1 else 0    # transposición (en bins de 1/3 de semitono)
+                if k: xs = torch.roll(xs, k, dims=3)
+                if a.eq and rng.random() < a.eq: xs = random_eq(xs, rng, a.spec)
+                views.append(xs); shifts.append(k // 3)
+            p1 = F.softmax(model(views[0].to(dev)), 1)
+            p2 = torch.roll(F.softmax(model(views[1].to(dev)), 1), -2 * shifts[1], dims=1)   # deshace la transposición
+            loss = iic_loss(p1, p2)
+            opt.zero_grad(); loss.backward(); opt.step(); sched.step(); tot += loss.item()
+        print(f'autosupervisado época {ep + 1}/{a.epochs}  IIC {tot / a.steps:.3f}  {time.time() - t0:.0f}s', flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('manifest'); ap.add_argument('frames')
@@ -197,6 +229,7 @@ def main():
     ap.add_argument('--spec', default='', help='carpeta con espectros logarítmicos (skale-cli --spec): usa KeyNetSpec')
     ap.add_argument('--eval-only', default='gtzan,fma_full_test', help='grupos que nunca se usan para entrenar, ni con --all (solo evaluación)')
     ap.add_argument('--exclude', default='', help='JSON con [grupo, nombre] que no se usan para entrenar (p. ej. etiquetas dudosas)')
+    ap.add_argument('--ssl', default='', help='preentrenamiento autosupervisado con este manifiesto sin etiquetas (IIC entre dos trozos de la misma pista)')
     ap.add_argument('--max-frames', type=int, default=0, help='recorta cada pista a sus N fotogramas centrales (memoria; 0 = no)')
     ap.add_argument('--init', default='', help='parte de los pesos de otro modelo (.pt de la misma arquitectura), p. ej. preentrenado')
     ap.add_argument('--eq', type=float, default=0.0, help='probabilidad de ecualización aleatoria por lote (aumento; 0 = no)')
@@ -240,6 +273,15 @@ def main():
     elif a.spec: cfg['spec'] = True
     if a.init: model.load_state_dict(torch.load(a.init, map_location='cpu', weights_only=False)['state'])
     model.to(dev)
+    if a.ssl:
+        unl = load(a.ssl, a.frames, a.channels, in_ch, a.spec or None)
+        if a.max_frames:
+            for d in unl:
+                if len(d['x']) > a.max_frames: s0 = (len(d['x']) - a.max_frames) // 2; d['x'] = d['x'][s0:s0 + a.max_frames].copy()
+        print(f'autosupervisado con {len(unl)} pistas sin etiquetar', flush=True)
+        ssl_pretrain(a, model, unl, dev, rng)
+        torch.save(dict(state={k: v.cpu() for k, v in model.state_dict().items()}, cfg=cfg), a.out)
+        return
     opt = torch.optim.AdamW(model.parameters(), lr=2e-3, weight_decay=1e-2)
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=a.lr, total_steps=a.epochs * a.steps)
     def evaluate():
