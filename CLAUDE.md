@@ -93,7 +93,9 @@ con `frames4/manifest_lakh.json`): ni mezclados (`--group-scale lakh=0.5`) ni co
 (`--init`) mejoran el conjunto con dos semillas. Etiquetar FMA con detectores externos: en la partición fija
 nuestro modelo supera a Essentia (5 perfiles, mejor 54,6 % en FMA) y a madmom (CNN de tonalidad, 56,1 % en
 FMA; 78,5 % en Beatport, probablemente visto al entrenar); cuando discrepan de nosotros en FMA aciertan menos
-que nosotros, así que sus etiquetas no sirven. Pixabay y ccMixter bloquean el acceso automático (403 y `robots.txt`): no usarlos.
+que nosotros, así que sus etiquetas no sirven. KeyFinder (libKeyFinder 2.2.8, el de Mixxx; herramienta de
+contraste en `~/skale-runs/keyfinder`, fuera del repo): FMA 49,5 % frente a 63,4 %, partición fija 53,4 %
+frente a 66,7 %, GTZAN 50,7 % frente a 68,6 % (solo gana en blues: 43,9 frente a 35,7). Pixabay y ccMixter bloquean el acceso automático (403 y `robots.txt`): no usarlos.
 
 ## Normas
 - Música: conjuntos con licencia abierta y conjuntos de investigación publicados (también con audio comercial,
