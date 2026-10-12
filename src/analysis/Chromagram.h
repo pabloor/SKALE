@@ -3,6 +3,7 @@
 #include <array>
 #include <complex>
 #include <cstddef>
+#include <deque>
 #include <vector>
 
 #include "analysis/Fft.h"
@@ -32,6 +33,12 @@ struct ChromaParams {
     double maxFreq = 2100.0;
     double gamma = 0.5;         // compresión de amplitud: peso = magnitud^gamma
     double peakFloor = 0.03;    // pico mínimo respecto al mayor del fotograma
+    // Separación de armonía y percusión (HPSS, filtros de mediana) antes de buscar picos: la magnitud de cada
+    // fotograma se multiplica por H²/(H²+P²), con H = mediana en el tiempo (hpssTimeFrames fotogramas
+    // centrados) y P = mediana en frecuencia (hpssFreqBins bins). Retrasa la salida (hpssTimeFrames-1)/2 fotogramas.
+    bool hpss = false;
+    int hpssTimeFrames = 9;
+    int hpssFreqBins = 17;
 };
 
 // Extrae un cromagrama fino de audio mono en streaming: se puede alimentar en
@@ -41,13 +48,22 @@ public:
     explicit ChromaExtractor(double sampleRate, ChromaParams params = {});
 
     std::vector<ChromaFrame> process(const float* mono, std::size_t n);
+    // Al final del audio: con HPSS devuelve los fotogramas que aún esperaban a los siguientes. Sin HPSS, nada.
+    std::vector<ChromaFrame> flush();
     void reset();
 
     std::size_t fftSize() const { return fftSize_; }
     double hopSeconds() const { return double(hop_) / sampleRate_; }
 
 private:
-    void analyseFrame(const float* x, ChromaFrame& out);
+    struct SpecFrame {
+        std::vector<float> mag;   // magnitud de los bins 0..magBins_-1 (ceros si es silencio)
+        double time = 0;
+        bool silent = true;
+    };
+    void spectrum(const float* x, SpecFrame& f);
+    void analyseMagnitude(const float* mag, ChromaFrame& out);
+    void emitHpss(std::vector<ChromaFrame>& out, bool final);
 
     double sampleRate_;
     ChromaParams params_;
@@ -60,8 +76,13 @@ private:
     std::vector<float> pending_;
     std::size_t pendingStart_ = 0;     // índice de pending_[0] en el flujo
     std::size_t nextFrameStart_ = 0;
+    std::size_t magBins_;
     std::vector<std::complex<float>> buf_;
-    std::vector<float> mag_;
+    std::deque<SpecFrame> hist_;       // fotogramas guardados para la mediana temporal (HPSS)
+    std::size_t histStart_ = 0;        // índice del fotograma hist_[0]
+    std::size_t framesIn_ = 0;         // fotogramas calculados
+    std::size_t nextOut_ = 0;          // siguiente fotograma por analizar (HPSS)
+    std::vector<float> masked_, column_;
 };
 
 // Desviación de afinación global estimada del cromagrama acumulado:

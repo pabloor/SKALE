@@ -179,6 +179,43 @@ void testChroma() {
     CHECK(total == frames.size(), "bloques: %zu fotogramas vs %zu", total, frames.size());
 }
 
+void testHpss() {
+    // La 440 sostenido con golpes de ruido (50 ms cada 0,5 s): con HPSS la masa del cromagrama en La
+    // debe aumentar, no debe perderse ningún fotograma por el retraso y el tamaño de bloque no debe influir.
+    std::vector<float> a(std::size_t(4 * kRate), 0.f);
+    addNote(a, 0, a.size(), 69, 0.2f, 0);
+    unsigned seed = 12345;
+    for (std::size_t start = 0; start < a.size(); start += std::size_t(0.5 * kRate)) {
+        for (std::size_t i = start; i < std::min(a.size(), start + std::size_t(0.05 * kRate)); ++i) {
+            seed = seed * 1664525u + 1013904223u;
+            a[i] += 0.8f * (float(seed >> 8) / float(1u << 24) - 0.5f);
+        }
+    }
+    auto massOnA = [](const std::vector<ChromaFrame>& fr) {
+        double on = 0, all = 0;
+        for (const auto& f : fr) for (std::size_t i = 0; i < 36; ++i) { all += f.chroma[i]; if (i >= 26 && i <= 28) on += f.chroma[i]; }
+        return all > 0 ? on / all : 0.0;
+    };
+    ChromaExtractor plain(kRate);
+    const auto f0 = plain.process(a.data(), a.size());
+    ChromaParams hp;
+    hp.hpss = true;
+    ChromaExtractor sep(kRate, hp);
+    auto f1 = sep.process(a.data(), a.size());
+    for (auto& f : sep.flush()) f1.push_back(f);
+    CHECK(f1.size() == f0.size(), "HPSS: %zu fotogramas frente a %zu", f1.size(), f0.size());
+    CHECK(massOnA(f1) > massOnA(f0), "HPSS: masa en La %.3f frente a %.3f sin separar", massOnA(f1), massOnA(f0));
+    ChromaExtractor sep2(kRate, hp);
+    std::vector<ChromaFrame> f2;
+    for (std::size_t pos = 0; pos < a.size(); pos += 1000) {
+        for (auto& f : sep2.process(a.data() + pos, std::min<std::size_t>(1000, a.size() - pos))) f2.push_back(f);
+    }
+    for (auto& f : sep2.flush()) f2.push_back(f);
+    bool same = f2.size() == f1.size();
+    for (std::size_t i = 0; same && i < f1.size(); ++i) same = f1[i].chroma == f2[i].chroma && f1[i].time == f2[i].time;
+    CHECK(same, "HPSS en bloques de 1000 muestras da los mismos fotogramas");
+}
+
 void testKeys() {
     for (int tonic = 0; tonic < 12; ++tonic) {
         for (int m = 0; m < 2; ++m) {
@@ -342,6 +379,7 @@ int main() {
     testTheory();
     testFft();
     testChroma();
+    testHpss();
     testKeys();
     testDoubtful();
     testDetunedKey();

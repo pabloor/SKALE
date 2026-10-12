@@ -37,6 +37,7 @@ def parse_key(t):
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('datos'); ap.add_argument('salida')
     ap.add_argument('--cli', default='build/skale-cli'); ap.add_argument('--hilos', type=int, default=os.cpu_count() or 4)
+    ap.add_argument('--cli-args', default='', help='opciones extra de skale-cli, p. ej. "--hpss"')
     a = ap.parse_args()
     fr, sp = os.path.join(a.salida, 'frames4'), os.path.join(a.salida, 'spec')
     os.makedirs(fr, exist_ok=True); os.makedirs(sp, exist_ok=True)
@@ -54,7 +55,7 @@ def main():
         name = f"{g}_{hashlib.md5(fn.encode()).hexdigest()[:12]}.bin"   # mismo nombre que tools/dump_frames.py
         pf, ps = os.path.join(fr, name), os.path.join(sp, name)
         if not (os.path.exists(pf) and os.path.exists(ps)):
-            subprocess.run([a.cli, f, '--model', 'classic', '--frames', pf, '--spec', ps], capture_output=True)
+            subprocess.run([a.cli, f, '--model', 'classic', '--frames', pf, '--spec', ps] + a.cli_args.split(), capture_output=True)
         ok = os.path.exists(pf) and os.path.getsize(pf) >= 4 * 4 * 36 * 20 and os.path.exists(ps)
         return dict(group=g, name=fn, label=k, file=name) if ok else None
 

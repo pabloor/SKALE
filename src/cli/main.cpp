@@ -16,6 +16,7 @@ void usage() {
                  "  --doubt <r>                dudosa (se dan dos tonalidades) si la 2ª tiene >= r veces la probabilidad de la 1ª (por defecto 0.5; 0 = nunca)\n"
                  "  --cnn-weight <w>           peso de las redes frente al lineal en ensemble, para cualquier duración\n"
                  "                             (por defecto 1 = solo las redes por debajo de 60 s y 0.85 desde 60 s)\n"
+                 "  --hpss            separa armonía y percusión antes del cromagrama (experimental)\n"
                  "  --spec <archivo.bin>       vuelca el espectro logarítmico por fotograma (float32 [n][216])\n"
                  "  --frames <archivo.bin>     vuelca la serie de cromagramas finos (float32, para redes)\n"
                  "  --features        volcado de cromagramas y uso de acordes (JSON, para experimentos)\n"
@@ -166,6 +167,8 @@ int main(int argc, char** argv) {
             options.cnnWeight = options.cnnWeightLong = std::atof(argv[++i]);
         } else if (!std::strcmp(arg, "--doubt") && i + 1 < argc) {
             options.doubtRatio = std::atof(argv[++i]);
+        } else if (!std::strcmp(arg, "--hpss")) {
+            options.chroma.hpss = true;
         } else if (!std::strcmp(arg, "--chroma-gamma") && i + 1 < argc) {
             options.chroma.gamma = std::atof(argv[++i]);
         } else if (!std::strcmp(arg, "--chroma-min") && i + 1 < argc) {

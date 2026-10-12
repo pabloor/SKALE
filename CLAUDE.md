@@ -53,14 +53,9 @@ las demás con `tools/eval_key_cnn.py` (C++ y PyTorch dan lo mismo). La mejora d
 ecualizar) se confirmaron con dos juegos de semillas. Con la ecualización el lineal resta y se quitó.
 
 ## Siguiente paso
-Pendiente (el usuario lo aplazó): **separar percusión y armonía (HPSS) antes del cromagrama y del espectro**,
-en el analizador en C++. Plan: implementarlo con tests, recalcular características (`prepare_training.py`),
-entrenar las 5 redes con `--split tools/samples/test_split_gtzan.json` y comparar con las `split_*` actuales
-en FMA y GTZAN (≈ 2 h hasta saber si sirve); si mejora, confirmar con otras semillas y pasar a producción
-(≈ 1,5 h más). Medir también el coste en tiempo de análisis. Esperado: 0 a +1 punto.
-Otras ideas sin probar: una red con cromagrama y espectro a la vez. El límite parece ser la cantidad de datos
-reales etiquetados: la página `tools/etiquetar.py` está lista (7.389 pistas de FMA en `~/skale-datos/fma_user`)
-si alguien con buen oído puede etiquetar.
+Ideas sin probar: una red con cromagrama y espectro a la vez. Todo lo demás probado (ver abajo) apunta a que
+el límite es la cantidad de datos reales etiquetados: la página `tools/etiquetar.py` está lista (7.389 pistas
+de FMA en `~/skale-datos/fma_user`) si alguien con buen oído puede etiquetar.
 
 ## Modelos entrenados (`models/`, formato {'state','cfg'})
 - `final_c2.pt`, `final_c4.pt`, `final_c4_long.pt`: las 3 redes de cromagrama anteriores, sin ecualización.
@@ -95,7 +90,10 @@ nuestro modelo supera a Essentia (5 perfiles, mejor 54,6 % en FMA) y a madmom (C
 FMA; 78,5 % en Beatport, probablemente visto al entrenar); cuando discrepan de nosotros en FMA aciertan menos
 que nosotros, así que sus etiquetas no sirven. KeyFinder (libKeyFinder 2.2.8, el de Mixxx; herramienta de
 contraste en `~/skale-runs/keyfinder`, fuera del repo): FMA 49,5 % frente a 63,4 %, partición fija 53,4 %
-frente a 66,7 %, GTZAN 50,7 % frente a 68,6 % (solo gana en blues: 43,9 frente a 35,7). Pixabay y ccMixter bloquean el acceso automático (403 y `robots.txt`): no usarlos.
+frente a 66,7 %, GTZAN 50,7 % frente a 68,6 % (solo gana en blues: 43,9 frente a 35,7). Separar armonía y percusión (HPSS, filtros de mediana, `ChromaParams::hpss`, `skale-cli --hpss`,
+desactivado por defecto; características en `~/skale-train-hpss`): las 5 redes con HPSS dan FMA 63,3 / GTZAN
+68,3 / partición fija 66,5 frente a 63,4 / 68,0 / 66,7; las 10 juntas 63,0 / 69,2 / 66,5. No mejora (la
+ventana de ~370 ms ya diluye la percusión) y cuesta +20 % de tiempo. Pixabay y ccMixter bloquean el acceso automático (403 y `robots.txt`): no usarlos.
 
 ## Normas
 - Música: conjuntos con licencia abierta y conjuntos de investigación publicados (también con audio comercial,
