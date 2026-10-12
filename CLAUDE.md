@@ -11,7 +11,8 @@ variada) y en el total; también MIREX (`tools/eval_key_cnn.py`).
 
 ## Cómo analiza ahora (por defecto, `--model ensemble`)
 Log-probabilidades de 24 tonalidades = 0,5 × media de 3 redes de cromagrama entrenadas con ecualización
-aleatoria (`--eq 0.5`) + 0,5 × media de 2 redes de espectro (`src/analysis/KeyCnn.cpp`, pesos en
+aleatoria (`--eq 0.5`) + 0,5 × media de 2 redes de espectro, todas entrenadas también con las canciones
+completas de FMAK (`--max-frames 1280`) (`src/analysis/KeyCnn.cpp`, pesos en
 `KeyCnnWeights.h`). Con audio de 60 s o más se mezcla 0,85 × redes + 0,15 × lineal (`KeyModelWeights.h`,
 que usa el acorde final); con menos, solo las redes (`cnnWeight`, `cnnWeightLong`, `longSeconds` en
 `src/analysis/Analyzer.h`; `--cnn-weight` en la CLI fija ambos). Si la 2ª tonalidad tiene ≥ 0,5 veces la
@@ -27,6 +28,18 @@ todo GTZAN). Modelo actual: 68,0 % con las redes `split_*` (skale-cli: 68,6 %; p
 rock 74, metal 72, hip hop 56, jazz 46, blues 36: el 97 % del blues está anotado como menor y el modelo suele
 decir la misma tónica en mayor). Entrenar con 585 de GTZAN dio +1,6 en las otras 252 (ruido): se decidió
 dejarlo como prueba independiente.
+
+## Canciones completas de FMAK
+`tools/get_fmak_full.py` baja las 5.489 canciones completas de FMAK (38 GB, de fma_full por rangos HTTP) a
+`~/skale-datos/fma_full`: grupo `fma_full` (4.393, entrenamiento) y `fma_full_test` (las 1.096 de la partición
+de prueba, solo evaluación; `--eval-only` las excluye). Evaluar con `--split ~/skale-runs/full2/split_eval.json`
+(partición fija + GTZAN + `fma_full_test`). Con las mismas 5 redes, entrenar también con ellas: GTZAN
+68,0 -> 69,5 (semillas A) y 66,8 -> 70,0 (semillas B), FMA sin cambio; el modelo final de producción dio
+68,7 % en GTZAN frente a 68,6 % del anterior (ruido entre semillas de ±1,5). En canciones completas de FMA de
+prueba, las redes `split_*` aciertan el 70,1 % (63,4 % con el fragmento de 30 s); el 15 % de lineal desde 60 s
+ahí resta 0,4 (en las 203 piezas clásicas y de Jamendo suma 2,9): se mantiene.
+Limpieza de etiquetas (validación cruzada en 4 partes, `--exclude`; 169 o 330 sospechosas): GTZAN +1,5/+1,9,
+FMA ±0,5; junto con las canciones completas no suma: no se usa.
 
 ## Resultados en la partición fija (acierto exacto, 1.497 pistas disponibles)
 | Modelo | FMA | Beatport | GuitarSet | GS+ | Total |
@@ -58,12 +71,14 @@ reales etiquetados: la página `tools/etiquetar.py` está lista (7.389 pistas
 de FMA en `~/skale-datos/fma_user`) si alguien con buen oído puede etiquetar.
 
 ## Modelos entrenados (`models/`, formato {'state','cfg'})
+- **Producción:** `final_c2_full.pt`, `final_c4_full.pt`, `final_c4_long_full.pt`, `final_spec_full.pt`,
+  `final_spec_w24_full.pt` (todos los datos más las canciones completas de FMAK; `--all --eval-only gtzan
+  --max-frames 1280`). Exportar: `tools/export_key_cnn.py models/final_c2_full.pt models/final_c4_full.pt
+  models/final_c4_long_full.pt models/final_spec_full.pt models/final_spec_w24_full.pt --spec-weight 0.5`.
+  Sus versiones sin la partición de prueba: `split_*_full.pt`.
 - `final_c2.pt`, `final_c4.pt`, `final_c4_long.pt`: las 3 redes de cromagrama anteriores, sin ecualización.
-- `final_c2_eq.pt`, `final_c4_eq.pt`, `final_c4_long_eq.pt`: las 3 redes de cromagrama de producción
-  (ecualización aleatoria, todos los datos; mismas opciones que las sin `_eq` más `--eq 0.5`).
-- `final_spec.pt`, `final_spec_w24.pt`: las 2 redes de espectro de producción (todos los datos, anchura 16 y 24).
-  Exportar las 5: `tools/export_key_cnn.py models/final_c2_eq.pt models/final_c4_eq.pt
-  models/final_c4_long_eq.pt models/final_spec.pt models/final_spec_w24.pt --spec-weight 0.5`.
+- Anteriores (sin canciones completas): `final_c2_eq.pt`, `final_c4_eq.pt`, `final_c4_long_eq.pt` (ecualización
+  aleatoria) y `final_spec.pt`, `final_spec_w24.pt` (espectro, anchura 16 y 24).
 - `split_*.pt` (y `split_*_eq.pt`): entrenadas sin la partición de prueba, para comparar (`split_c2`, `split_c4`,
   `split_c4_long`, `split_spec`, `split_spec_w24`).
 

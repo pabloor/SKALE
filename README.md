@@ -139,6 +139,17 @@ Frente a la versión anterior (66,7 % en total con 0,15 de lineal) el total qued
 
 Es la cifra que debe esperarse al analizar canciones completas; con fragmentos de 30 s de música variada (FMA), 63,4 %. Las etiquetas de Jamendo son por consenso de detectores (algo circular) y las de autor, a veces discutibles.
 
+**Canciones completas de FMAK (modelo actual).** Las etiquetas de FMAK son de la canción entera, pero el audio que usábamos era un fragmento de 30 s. `tools/get_fmak_full.py` baja las 5.489 canciones completas (38 GB) del archivo `fma_full` de FMA; las 1.096 de la partición de prueba se guardan aparte y solo sirven para evaluar. Con ellas, las redes ven ~7 veces más audio real con su etiqueta correcta. Resultados con las mismas 5 redes (dos juegos de semillas, A y B):
+
+| Redes | FMA 30 s | FMA canciones completas | GTZAN | Total |
+|---|---|---|---|---|
+| A sin canciones completas | 63,4 | 70,1 | 68,0 | 68,1 |
+| A con canciones completas | 63,6 | 69,8 | 69,5 | 68,7 |
+| B sin canciones completas | 63,1 | 69,3 | 66,8 | 67,6 |
+| B con canciones completas | 62,4 | 70,2 | 70,0 | 68,3 |
+
+Ayuda con música comercial nueva (GTZAN) y no cambia FMA; el modelo final, entrenado con todos los datos, da en GTZAN 68,7 % (anterior: 68,6 %; correcta entre las mostradas 78,4 % frente a 77,3 %), así que la mejora real es pequeña. **Dato importante:** con las canciones completas de FMA de prueba (nunca vistas), Skale acierta el **70 %** (frente al 63 % con su fragmento de 30 s). Probado sin mejora adicional: quitar del entrenamiento las etiquetas que contradicen con seguridad redes entrenadas sin ellas (validación cruzada; GTZAN +1,5–1,9, FMA ±0,5, y junto con las canciones completas no suma).
+
 **Música comercial: GTZAN (solo evaluación).** 837 fragmentos de 30 s de canciones comerciales de 9 géneros ([GTZAN](https://huggingface.co/datasets/marsyas/gtzan), con las tonalidades anotadas por [Lerch et al.](https://github.com/audiocontentanalysis/dataset-gtzan-key), MIT). Nunca se usa para entrenar, así que mide cómo funciona Skale con música que no ha oído:
 
 | GTZAN (skale-cli) | Pop | Country | Reggae | Rock | Metal | Disco | Hip hop | Jazz | Blues | **Total** |

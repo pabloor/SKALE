@@ -34,6 +34,10 @@ python tools/fetch_datasets.py ~/skale-datos          # se puede interrumpir y r
 python tools/prepare_training.py ~/skale-datos ~/skale-train
 ```
 
+Canciones completas de FMAK (opcional, 38 GB; el modelo actual las usa):
+`python tools/get_fmak_full.py ~/skale-datos/fma ~/skale-datos/fma_full --hilos 12` (antes de `prepare_training.py`;
+al entrenar con ellas, `--max-frames 1280` para no pasarse de memoria).
+
 `fetch_datasets.py` baja FMAK (Free Music Archive), Beatport EDM Key, GiantSteps Key+, GuitarSet y los
 conjuntos pequeños de archive.org, con los mismos nombres que las listas de `tools/samples/`.
 `prepare_training.py` calcula con `skale-cli` los cromagramas (`frames4/`) y los espectros (`spec/`):

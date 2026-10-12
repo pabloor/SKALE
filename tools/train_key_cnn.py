@@ -195,7 +195,9 @@ def main():
     ap.add_argument('--group-scale', default='', help='factor de muestreo por grupo, p. ej. pseudo=0.5')
     ap.add_argument('--both', action='store_true', help='red con cromagrama y espectro a la vez (KeyNetBoth; necesita --spec)')
     ap.add_argument('--spec', default='', help='carpeta con espectros logarítmicos (skale-cli --spec): usa KeyNetSpec')
-    ap.add_argument('--eval-only', default='gtzan', help='grupos que nunca se usan para entrenar, ni con --all (solo evaluación)')
+    ap.add_argument('--eval-only', default='gtzan,fma_full_test', help='grupos que nunca se usan para entrenar, ni con --all (solo evaluación)')
+    ap.add_argument('--exclude', default='', help='JSON con [grupo, nombre] que no se usan para entrenar (p. ej. etiquetas dudosas)')
+    ap.add_argument('--max-frames', type=int, default=0, help='recorta cada pista a sus N fotogramas centrales (memoria; 0 = no)')
     ap.add_argument('--init', default='', help='parte de los pesos de otro modelo (.pt de la misma arquitectura), p. ej. preentrenado')
     ap.add_argument('--eq', type=float, default=0.0, help='probabilidad de ecualización aleatoria por lote (aumento; 0 = no)')
     ap.add_argument('--all', action='store_true', help='entrena con todos los datos (modelo final, sin conjunto de prueba)')
@@ -209,6 +211,9 @@ def main():
     in_ch = a.use_channels or a.channels
     data = load(a.manifest, a.frames, a.channels, in_ch, a.spec or None, both=a.both)
     data = [d for d in data if d['group'] not in set(filter(None, a.eval_only.split(',')))]
+    if a.max_frames:
+        for d in data:
+            if len(d['x']) > a.max_frames: s0 = (len(d['x']) - a.max_frames) // 2; d['x'] = d['x'][s0:s0 + a.max_frames].copy()
     hold = set(filter(None, a.holdout.split(',')))
     idx = np.arange(len(data)); te = np.zeros(len(data), bool); srng = np.random.default_rng(12345)   # partición fija e independiente de la semilla
     for g in sorted({d['group'] for d in data}):
@@ -220,7 +225,9 @@ def main():
         names = {tuple(r) for r in json.load(open(a.split))}
         te = np.array([(d['group'], d['name']) in names for d in data]); te[[i for i in idx if data[i]['group'] in hold]] = True
     if a.all: te[:] = False
-    tr = [i for i in idx if not te[i]]; ts = [i for i in idx if te[i]]
+    excl = {tuple(r) for r in json.load(open(a.exclude))} if a.exclude else set()
+    tr = [i for i in idx if not te[i] and (data[i]['group'], data[i]['name']) not in excl]; ts = [i for i in idx if te[i]]
+    if excl: print(f'excluidas del entrenamiento: {len(excl)}', flush=True)
     gsize = collections.Counter(data[i]['group'] for i in tr)
     scale = {kv.split('=')[0]: float(kv.split('=')[1]) for kv in filter(None, a.group_scale.split(','))}
     p = np.array([gsize[data[i]['group']] ** -0.5 * scale.get(data[i]['group'], 1.0) for i in tr]); p /= p.sum()      # muestreo ~ 1/sqrt(tamaño del grupo)
