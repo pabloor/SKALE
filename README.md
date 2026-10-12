@@ -150,6 +150,17 @@ Es la cifra que debe esperarse al analizar canciones completas; con fragmentos d
 
 Ayuda con música comercial nueva (GTZAN) y no cambia FMA; el modelo final, entrenado con todos los datos, da en GTZAN 68,7 % (anterior: 68,6 %; correcta entre las mostradas 78,4 % frente a 77,3 %), así que la mejora real es pequeña. **Dato importante:** con las canciones completas de FMA de prueba (nunca vistas), Skale acierta el **70 %** (frente al 63 % con su fragmento de 30 s). Probado sin mejora adicional: quitar del entrenamiento las etiquetas que contradicen con seguridad redes entrenadas sin ellas (validación cruzada; GTZAN +1,5–1,9, FMA ±0,5, y junto con las canciones completas no suma).
 
+**Más conjuntos etiquetados (probados, no mejoran).** Cada uno añadido por separado a la configuración actual, con las mismas 5 redes:
+
+| Añadido | FMA 30 s | FMA completas | GTZAN | Total |
+|---|---|---|---|---|
+| (ninguno) | 63,6 | 69,8 | 69,5 | 68,7 |
+| [Freesound Loop Dataset](https://zenodo.org/records/3967852): 886 loops con la tonalidad de expertos | 63,0 | 69,7 | 68,9 | 68,2 |
+| [MusicNet](https://zenodo.org/records/5120004): 147 movimientos clásicos reales (tonalidad del título comprobada con las notas) | 63,0 | 70,1 | 69,2 | 68,3 |
+| [AAM](https://zenodo.org/records/5794629): 2.705 tramos de canciones artificiales | 63,3 | 69,9 | 69,9 | 68,5 |
+
+Los loops son demasiado cortos y distintos de una canción; MusicNet y AAM son piezas de tonalidad muy clara que el modelo ya acierta. Tampoco mejoran sumar dos juegos de redes (10 en vez de 5: +0,1 a +0,5, con el doble de tiempo) ni combinar las ventanas de ~24 s de otra forma que la media (±0,4 en canciones completas de FMA). Herramientas: `tools/get_fsl10k.py`, `tools/get_musicnet_keys.py`, `tools/get_aam.py`.
+
 **Música comercial: GTZAN (solo evaluación).** 837 fragmentos de 30 s de canciones comerciales de 9 géneros ([GTZAN](https://huggingface.co/datasets/marsyas/gtzan), con las tonalidades anotadas por [Lerch et al.](https://github.com/audiocontentanalysis/dataset-gtzan-key), MIT). Nunca se usa para entrenar, así que mide cómo funciona Skale con música que no ha oído:
 
 | GTZAN (skale-cli) | Pop | Country | Reggae | Rock | Metal | Disco | Hip hop | Jazz | Blues | **Total** |

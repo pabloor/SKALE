@@ -111,7 +111,13 @@ desactivado por defecto; características en `~/skale-train-hpss`): las 5 redes 
 ventana de ~370 ms ya diluye la percusión) y cuesta +20 % de tiempo. Red con cromagrama y espectro a la vez (`train_key_cnn.py --both`, KeyNetBoth, ~270.000 parámetros,
 ramas unidas por clase de nota antes de la cabeza equivariante): sola 60,3–60,4 % en FMA y 62–64 % en GTZAN
 (como la mejor red suelta); añadida al conjunto empeora GTZAN (66,4–66,9 frente a 68,0) y no mejora FMA.
-Pixabay y ccMixter bloquean el acceso automático (403 y `robots.txt`): no usarlos.
+Más datos etiquetados, añadidos uno a uno a la configuración actual (5 redes, semillas A, con canciones
+completas; FMA 63,6 / GTZAN 69,5 / FMA completas 69,8): loops de Freesound (`tools/get_fsl10k.py`, 886 con
+anotadores de acuerdo) 63,0 / 68,9 / 69,7; MusicNet (`tools/get_musicnet_keys.py`, 147 movimientos con la
+tonalidad del título comprobada con las notas; el modelo ya acertaba el 92,5 %) 63,0 / 69,2 / 70,1; AAM
+(`tools/get_aam.py`, 2.705 tramos sintéticos de una tonalidad) 63,3 / 69,9 / 69,9 y GuitarSet −5,6. Ninguno
+mejora. Sumar dos juegos de semillas (10 redes) y otras formas de combinar las ventanas (por confianza, más
+peso al final) tampoco: ±0,4 en FMA completas. Pixabay y ccMixter bloquean el acceso automático (403 y `robots.txt`): no usarlos.
 
 ## Normas
 - Música: conjuntos con licencia abierta y conjuntos de investigación publicados (también con audio comercial,

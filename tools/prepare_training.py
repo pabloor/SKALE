@@ -26,6 +26,9 @@ GROUPS = {
     'fma_user': [('fma_user', 'expected.csv')],   # etiquetas a mano (tools/etiquetar.py); siempre de entrenamiento
     'fma_full': [('fma_full', 'expected.csv')],   # FMAK con la canción completa (tools/get_fmak_full.py), sin la prueba
     'fma_full_test': [('fma_full', 'expected_test.csv')],   # las de la partición de prueba, completas: solo evaluación
+    'fsl10k': [('fsl10k', 'expected.csv')],       # loops de Freesound con tonalidad de expertos (tools/get_fsl10k.py)
+    'musicnet': [('musicnet', 'expected.csv')],   # clásica real, tonalidad del título comprobada con las notas
+    'aam': [('aam', 'expected.csv')],             # canciones artificiales, tramos de una tonalidad (tools/get_aam.py)
     'gtzan': [('gtzan', 'expected.csv')],         # GTZAN (837 con tonalidad): solo evaluación, train_key_cnn.py lo excluye
 }
 PC = {'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11}
