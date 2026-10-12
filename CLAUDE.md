@@ -98,15 +98,15 @@ corrección del sesgo mayor/menor; autoentrenamiento con 20.000 pistas FMA sin e
 (los alumnos igualan al conjunto, no lo superan). Lo que sí funcionó: promediar redes **distintas**. Entrenar más
 (100 épocas: sobreajusta); red de espectro con ventana de ~48 s; ecualización en las redes de espectro.
 MERT-v1-95M como profesor (media temporal por capa + clasificador, 30 s centrales): 52,8 % en FMA
-frente a 63,4 % nuestro; mezclado con peso 0,15, +0,4 (ruido). No sirve. Datos sintéticos de Lakh MIDI (`tools/gen_lakh.py`, 16.941 fragmentos; características en `~/skale-train`
-con `frames4/manifest_lakh.json`): ni mezclados (`--group-scale lakh=0.5`) ni como preentrenamiento
+frente a 63,4 % nuestro; mezclado con peso 0,15, +0,4 (ruido). No sirve. Datos sintéticos de Lakh MIDI (`tools/gen_lakh.py`, 16.941 fragmentos; datos y características borrados el 13-10-2026, se
+regeneran con la herramienta): ni mezclados (`--group-scale lakh=0.5`) ni como preentrenamiento
 (`--init`) mejoran el conjunto con dos semillas. Etiquetar FMA con detectores externos: en la partición fija
 nuestro modelo supera a Essentia (5 perfiles, mejor 54,6 % en FMA) y a madmom (CNN de tonalidad, 56,1 % en
 FMA; 78,5 % en Beatport, probablemente visto al entrenar); cuando discrepan de nosotros en FMA aciertan menos
 que nosotros, así que sus etiquetas no sirven. KeyFinder (libKeyFinder 2.2.8, el de Mixxx; herramienta de
 contraste en `~/skale-runs/keyfinder`, fuera del repo): FMA 49,5 % frente a 63,4 %, partición fija 53,4 %
 frente a 66,7 %, GTZAN 50,7 % frente a 68,6 % (solo gana en blues: 43,9 frente a 35,7). Separar armonía y percusión (HPSS, filtros de mediana, `ChromaParams::hpss`, `skale-cli --hpss`,
-desactivado por defecto; características en `~/skale-train-hpss`): las 5 redes con HPSS dan FMA 63,3 / GTZAN
+desactivado por defecto; sus características se borraron): las 5 redes con HPSS dan FMA 63,3 / GTZAN
 68,3 / partición fija 66,5 frente a 63,4 / 68,0 / 66,7; las 10 juntas 63,0 / 69,2 / 66,5. No mejora (la
 ventana de ~370 ms ya diluye la percusión) y cuesta +20 % de tiempo. Red con cromagrama y espectro a la vez (`train_key_cnn.py --both`, KeyNetBoth, ~270.000 parámetros,
 ramas unidas por clase de nota antes de la cabeza equivariante): sola 60,3–60,4 % en FMA y 62–64 % en GTZAN
@@ -118,9 +118,15 @@ tonalidad del título comprobada con las notas; el modelo ya acertaba el 92,5 %)
 (`tools/get_aam.py`, 2.705 tramos sintéticos de una tonalidad) 63,3 / 69,9 / 69,9 y GuitarSet −5,6. Ninguno
 mejora. Sumar dos juegos de semillas (10 redes) y otras formas de combinar las ventanas (por confianza, más
 peso al final) tampoco: ±0,4 en FMA completas. Preentrenamiento autosupervisado (`train_key_cnn.py --ssl`, IIC entre dos trozos de la misma pista con
-desafinación, ecualización y transposición; 24.625 fragmentos de fma_medium, `manifest_unlabeled.json`) y
+desafinación, ecualización y transposición; 24.625 fragmentos de fma_medium; datos borrados) y
 ajuste con `--init`: cada red pierde 1-5 puntos y la de espectro ancha se rompe (FMA 59,3 / GTZAN 67,3 frente
 a 63,6 / 69,5). La transposición ya la cumplen las redes por construcción; agrupar trozos no es la tonalidad. Pixabay y ccMixter bloquean el acceso automático (403 y `robots.txt`): no usarlos.
+
+## Disco (13-10-2026)
+En `~/skale-datos` quedan solo los conjuntos que se usan (FMAK en fragmentos y completo, Beatport, GiantSteps+,
+GuitarSet, los pequeños, GTZAN y fma_small para la página de etiquetado). AAM, MusicNet, fma_medium, Lakh,
+FSL10K, los bancos de sonidos, las características de HPSS y de los datos sin etiquetar, y los entornos de
+MERT, madmom y Essentia se movieron a la papelera (~82 GB); se pueden regenerar con sus herramientas.
 
 ## Normas
 - Música: conjuntos con licencia abierta y conjuntos de investigación publicados (también con audio comercial,
