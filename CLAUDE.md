@@ -53,8 +53,8 @@ las demás con `tools/eval_key_cnn.py` (C++ y PyTorch dan lo mismo). La mejora d
 ecualizar) se confirmaron con dos juegos de semillas. Con la ecualización el lineal resta y se quitó.
 
 ## Siguiente paso
-Ideas sin probar: una red con cromagrama y espectro a la vez. Todo lo demás probado (ver abajo) apunta a que
-el límite es la cantidad de datos reales etiquetados: la página `tools/etiquetar.py` está lista (7.389 pistas
+Todas las ideas pendientes están probadas (ver abajo); todo apunta a que el límite es la cantidad de datos
+reales etiquetados: la página `tools/etiquetar.py` está lista (7.389 pistas
 de FMA en `~/skale-datos/fma_user`) si alguien con buen oído puede etiquetar.
 
 ## Modelos entrenados (`models/`, formato {'state','cfg'})
@@ -93,7 +93,10 @@ contraste en `~/skale-runs/keyfinder`, fuera del repo): FMA 49,5 % frente a 63,4
 frente a 66,7 %, GTZAN 50,7 % frente a 68,6 % (solo gana en blues: 43,9 frente a 35,7). Separar armonía y percusión (HPSS, filtros de mediana, `ChromaParams::hpss`, `skale-cli --hpss`,
 desactivado por defecto; características en `~/skale-train-hpss`): las 5 redes con HPSS dan FMA 63,3 / GTZAN
 68,3 / partición fija 66,5 frente a 63,4 / 68,0 / 66,7; las 10 juntas 63,0 / 69,2 / 66,5. No mejora (la
-ventana de ~370 ms ya diluye la percusión) y cuesta +20 % de tiempo. Pixabay y ccMixter bloquean el acceso automático (403 y `robots.txt`): no usarlos.
+ventana de ~370 ms ya diluye la percusión) y cuesta +20 % de tiempo. Red con cromagrama y espectro a la vez (`train_key_cnn.py --both`, KeyNetBoth, ~270.000 parámetros,
+ramas unidas por clase de nota antes de la cabeza equivariante): sola 60,3–60,4 % en FMA y 62–64 % en GTZAN
+(como la mejor red suelta); añadida al conjunto empeora GTZAN (66,4–66,9 frente a 68,0) y no mejora FMA.
+Pixabay y ccMixter bloquean el acceso automático (403 y `robots.txt`): no usarlos.
 
 ## Normas
 - Música: conjuntos con licencia abierta y conjuntos de investigación publicados (también con audio comercial,

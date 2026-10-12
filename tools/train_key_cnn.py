@@ -77,9 +77,61 @@ class KeyNetSpec(nn.Module):
         return self.head(r).reshape(f.shape[0], 24)          # (tónica, modo) -> tónica*2 + modo
 
 
-def load(manifest, d, channels=2, use=None, spec_dir=None):
+class KeyNetBoth(nn.Module):
+    """Cromagrama y espectro a la vez (experimental). Entrada (B, 1, T, in_ch*36 + 216): por fotograma, los
+    cromagramas de las bandas seguidos del espectro. Una rama como KeyNet (36 posiciones) y otra como KeyNetSpec
+    (12 clases de nota); las características de las dos se juntan por clase de nota antes de la cabeza
+    equivariante, así que la red puede cruzar la información de ambas entradas."""
+    def __init__(self, ch=16, hidden=64, drop=0.2, in_ch=4):
+        super().__init__()
+        self.ch = ch; self.in_ch = in_ch; self.both = True
+        self.c = KeyNet(ch=ch, hidden=hidden, drop=drop, in_ch=in_ch)       # se usan solo sus convoluciones
+        self.s = KeyNetSpec(ch=ch, hidden=hidden, drop=drop)
+        self.head = nn.Sequential(nn.Linear(10 * ch * 12, hidden), nn.ReLU(), nn.Dropout(drop), nn.Linear(hidden, 2))
+        idx = (torch.arange(12)[:, None] + torch.arange(12)[None, :]) % 12
+        self.register_buffer('rot', idx)
+
+    def forward(self, x):                                    # x: (B, 1, T, in_ch*36 + 216)
+        B, _, T, _ = x.shape; nc = self.in_ch * 36
+        xc = x[:, 0, :, :nc].reshape(B, T, self.in_ch, 36).permute(0, 2, 1, 3)
+        xs = x[:, :, :, nc:]
+        c = self.c
+        h = c._conv(xc, c.c1, c.bn1); h = c._conv(h, c.c2, c.bn2); h = c._conv(h, c.c3, c.bn3)
+        f1 = torch.cat([h.mean(2), h.amax(2)], dim=1)       # (B, 2ch, 36); bin 3n = nota n
+        f1 = torch.roll(f1, 1, dims=2).reshape(B, 2 * self.ch, 12, 3).permute(0, 1, 3, 2).reshape(B, 6 * self.ch, 12)
+        sp = self.s
+        g = sp._conv(xs, sp.c1, sp.bn1, 4); g = F.max_pool2d(g, (1, 3))
+        g = sp._conv(g, sp.c2, sp.bn2, 2); g = sp._conv(g, sp.c3, sp.bn3, 2)
+        f2 = torch.cat([g.mean(2), g.amax(2)], dim=1).reshape(B, 2 * self.ch, 6, 12)
+        f2 = torch.roll(torch.cat([f2.mean(2), f2.amax(2)], dim=1), 9, dims=2)   # (B, 4ch, 12); índice n = nota n
+        f = torch.cat([f1, f2], dim=1)                       # (B, 10ch, 12)
+        r = f[:, :, self.rot].permute(0, 2, 1, 3).reshape(B, 12, -1)
+        return self.head(r).reshape(B, 24)
+
+
+def both_split(xs, in_ch):
+    """(B, 1, T, in_ch*36 + 216) -> cromagramas (B, in_ch, T, 36) y espectro (B, 1, T, 216)."""
+    B, _, T, _ = xs.shape; nc = in_ch * 36
+    return xs[:, 0, :, :nc].reshape(B, T, in_ch, 36).permute(0, 2, 1, 3), xs[:, :, :, nc:]
+
+
+def both_join(xc, xs):
+    B, C, T, _ = xc.shape
+    return torch.cat([xc.permute(0, 2, 1, 3).reshape(B, 1, T, C * 36), xs], dim=3)
+
+
+def load(manifest, d, channels=2, use=None, spec_dir=None, both=False):
     M = json.load(open(manifest)); data = []
     for r in M:
+        if both:      # cromagramas comprimidos y espectro, fotograma a fotograma, en un solo vector
+            path = os.path.join(spec_dir, r['file'])
+            if not os.path.exists(path): continue
+            sp = np.fromfile(path, dtype=np.float32).reshape(-1, 216) * 3.0
+            fr = np.sqrt(np.maximum(np.fromfile(os.path.join(d, r['file']), dtype=np.float32).reshape(-1, channels, 36)[:, :use or channels], 0)) * 3.0
+            n = min(len(sp), len(fr))
+            x = np.concatenate([fr[:n].reshape(n, -1), sp[:n]], axis=1)[:, None, :]    # (T, 1, in_ch*36 + 216)
+            data.append(dict(group=r['group'], name=r['name'], y=r['label'][0] * 2 + (0 if r['label'][1] == 'major' else 1), x=x))
+            continue
         if spec_dir:
             path = os.path.join(spec_dir, r['file'])
             if not os.path.exists(path): continue
@@ -141,6 +193,7 @@ def main():
     ap.add_argument('--use-channels', type=int, default=0, help='usa solo los N primeros canales (p. ej. 2 de unos .bin de 4)')
     ap.add_argument('--train-only', default='', help='grupos que van siempre a entrenamiento (p. ej. pseudoetiquetas)')
     ap.add_argument('--group-scale', default='', help='factor de muestreo por grupo, p. ej. pseudo=0.5')
+    ap.add_argument('--both', action='store_true', help='red con cromagrama y espectro a la vez (KeyNetBoth; necesita --spec)')
     ap.add_argument('--spec', default='', help='carpeta con espectros logarítmicos (skale-cli --spec): usa KeyNetSpec')
     ap.add_argument('--eval-only', default='gtzan', help='grupos que nunca se usan para entrenar, ni con --all (solo evaluación)')
     ap.add_argument('--init', default='', help='parte de los pesos de otro modelo (.pt de la misma arquitectura), p. ej. preentrenado')
@@ -154,7 +207,7 @@ def main():
     torch.set_num_threads(a.threads or os.cpu_count() or 4); rng = np.random.default_rng(a.seed); torch.manual_seed(a.seed)
     dev = pick_device(a.device); print('dispositivo', dev, flush=True)
     in_ch = a.use_channels or a.channels
-    data = load(a.manifest, a.frames, a.channels, in_ch, a.spec or None)
+    data = load(a.manifest, a.frames, a.channels, in_ch, a.spec or None, both=a.both)
     data = [d for d in data if d['group'] not in set(filter(None, a.eval_only.split(',')))]
     hold = set(filter(None, a.holdout.split(',')))
     idx = np.arange(len(data)); te = np.zeros(len(data), bool); srng = np.random.default_rng(12345)   # partición fija e independiente de la semilla
@@ -173,8 +226,11 @@ def main():
     p = np.array([gsize[data[i]['group']] ** -0.5 * scale.get(data[i]['group'], 1.0) for i in tr]); p /= p.sum()      # muestreo ~ 1/sqrt(tamaño del grupo)
     print(f'entrenamiento {len(tr)}  prueba {len(ts)}', flush=True)
     cfg = dict(ch=a.ch, hidden=a.hidden, drop=a.drop, in_ch=in_ch, layers=a.layers, crop=a.crop)
-    model = KeyNetSpec(ch=a.ch, hidden=a.hidden, drop=a.drop) if a.spec else KeyNet(ch=a.ch, hidden=a.hidden, drop=a.drop, in_ch=in_ch, layers=a.layers)
-    if a.spec: cfg['spec'] = True
+    if a.both: model = KeyNetBoth(ch=a.ch, hidden=a.hidden, drop=a.drop, in_ch=in_ch)
+    elif a.spec: model = KeyNetSpec(ch=a.ch, hidden=a.hidden, drop=a.drop)
+    else: model = KeyNet(ch=a.ch, hidden=a.hidden, drop=a.drop, in_ch=in_ch, layers=a.layers)
+    if a.both: cfg['both'] = True
+    elif a.spec: cfg['spec'] = True
     if a.init: model.load_state_dict(torch.load(a.init, map_location='cpu', weights_only=False)['state'])
     model.to(dev)
     opt = torch.optim.AdamW(model.parameters(), lr=2e-3, weight_decay=1e-2)
@@ -190,6 +246,17 @@ def main():
             bi = rng.choice(len(tr), a.batch, p=p)
             xs = np.stack([crop(data[tr[j]]['x'], a.crop, rng) for j in bi]); ys = np.array([data[tr[j]]['y'] for j in bi])
             xs = torch.from_numpy(xs).permute(0, 2, 1, 3)
+            if a.both:   # mismos aumentos en las dos partes: desafinación, transposición y ecualización
+                xc, xp = both_split(xs, in_ch); d = int(rng.integers(-1, 2))
+                xc = torch.roll(xc, d, dims=3); xp = torch.roll(xp, d, dims=3)
+                if rng.random() < 0.5:
+                    k = int(rng.choice([-6, -3, 3, 6])); xc = torch.roll(xc, k, dims=3); xp = torch.roll(xp, k, dims=3)
+                    ys = ((ys // 2 + k // 3) % 12) * 2 + ys % 2
+                if a.eq and rng.random() < a.eq: xc = random_eq(xc, rng, False); xp = random_eq(xp, rng, True)
+                xs = both_join(xc, xp)
+                loss = F.cross_entropy(model(xs.to(dev)), torch.from_numpy(ys).long().to(dev), label_smoothing=0.05)
+                opt.zero_grad(); loss.backward(); opt.step(); sched.step(); loss_sum += loss.item()
+                continue
             # aumento: desafinación aleatoria de ±1 bin (±33 cents) con la misma etiqueta
             xs = torch.roll(xs, int(rng.integers(-1, 2)), dims=3)
             if a.spec and rng.random() < 0.5:   # además, transposición de ±1-2 semitonos (en el espectro no es circular)
