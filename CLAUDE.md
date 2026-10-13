@@ -16,9 +16,16 @@ completas de FMAK (`--max-frames 1280`) (`src/analysis/KeyCnn.cpp`, pesos en
 `KeyCnnWeights.h`). Con audio de 60 s o más se mezcla 0,85 × redes + 0,15 × lineal (`KeyModelWeights.h`,
 que usa el acorde final); con menos, solo las redes (`cnnWeight`, `cnnWeightLong`, `longSeconds` en
 `src/analysis/Analyzer.h`; `--cnn-weight` en la CLI fija ambos). Si la 2ª tonalidad tiene ≥ 0,5 veces la
-probabilidad de la 1ª, el resultado es «dudoso» y se dan las dos (`doubtRatio`, `--doubt`). Las redes son equivariantes a la
+probabilidad de la 1ª, el resultado es «dudoso» y se destacan las dos (`doubtRatio`, `--doubt`); si no, la 2ª se muestra en pequeño (con ella siempre: 82,4 % FMA completas, 85,1 % GTZAN). Las redes son equivariantes a la
 transposición. Entrada por fotograma (~0,19 s): cromagrama fino de 36 bins/octava de 4 bandas (cromagrama,
 bajo, medios, agudos) y espectro logarítmico de 216 bins.
+
+## Modo en directo (plugin, `KeyTracker`)
+Redes cada 3 s sobre los últimos 30 s; hasta llenar la ventana, la última respuesta sola; después, media con
+memoria de vida media 120 s (acumulada desde el principio). La 2ª tonalidad se da siempre («también posible»,
+en pequeño) y se destaca si es dudosa. Medir: `skale-cli audio --live-eval [--live-every 3]` (scripts en
+`~/skale-runs/live/medir4.py`, resultado en `resultado4.txt`). A los 30 s: FMA completas 74,8 % (89,4 % con la
+2ª), GTZAN 69,0 % (84,5 %); a los 3 min FMA 75,2 % (86,9 %). El método clásico anterior: 45–50 %.
 
 ## Prueba con música comercial: GTZAN (solo evaluación)
 837 fragmentos de 30 s de GTZAN con la tonalidad de Lerch (`tools/fetch_datasets.py --solo gtzan`, lista en

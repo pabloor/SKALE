@@ -96,19 +96,33 @@ void SkaleEditor::paintLive(juce::Graphics& g, juce::Rectangle<int> area) {
         return;
     }
 
+    auto keyRow = area.removeFromTop(56);
+    const juce::Font big(juce::FontOptions(40.f, juce::Font::bold));
     g.setColour(kAccent);
-    g.setFont(juce::FontOptions(40.f, juce::Font::bold));
-    g.drawText(snap_.keyName, area.removeFromTop(56), juce::Justification::left);
+    g.setFont(big);
+    g.drawText(snap_.keyName, keyRow, juce::Justification::left);
+    if (snap_.doubtful) {   // dos tonalidades parecidas de probables: se dan las dos
+        keyRow.removeFromLeft(int(juce::GlyphArrangement::getStringWidth(big, snap_.keyName)) + 12);
+        g.setColour(kAccent.withAlpha(0.7f));
+        g.setFont(juce::FontOptions(26.f, juce::Font::bold));
+        g.drawText("o " + juce::String(snap_.secondKeyName), keyRow, juce::Justification::left);
+    }
 
     g.setColour(juce::Colours::white.withAlpha(0.65f));
     g.setFont(juce::FontOptions(14.f));
-    juce::String conf = "Confianza " + juce::String(int(snap_.confidence * 100.f + 0.5f)) + " %";
-    if (snap_.candidates.size() > 1) {
-        conf += "   |   alternativas: ";
-        for (std::size_t i = 1; i < snap_.candidates.size() && i < 3; ++i) {
-            conf += juce::String(skale::keyName(snap_.candidates[i].key, false)) + "  ";
+    auto pct = [](float c) { return juce::String(int(c * 100.f + 0.5f)) + " %"; };
+    juce::String conf;
+    if (snap_.doubtful && snap_.candidates.size() > 1) {
+        conf = "Dudosa: " + pct(snap_.candidates[0].confidence) + " / " + pct(snap_.candidates[1].confidence);
+        if (snap_.secondSameNotes) conf += "  (mismas notas)";
+    } else {
+        conf = "Confianza " + pct(snap_.confidence);
+        if (snap_.candidates.size() > 1) {   // la 2ª siempre a la vista, en pequeño
+            conf += juce::String::fromUTF8("   |   también posible: ") + juce::String(snap_.secondKeyName) + " (" + pct(snap_.candidates[1].confidence) + ")";
+            if (snap_.secondSameNotes) conf += ", mismas notas";
         }
     }
+    if (!snap_.fromNets) conf += juce::String::fromUTF8("   |   primera estimación");
     g.drawText(conf, area.removeFromTop(22), juce::Justification::left);
 
     area.removeFromTop(10);
@@ -160,9 +174,9 @@ void SkaleEditor::paintFile(juce::Graphics& g, juce::Rectangle<int> area) {
         if (r.secondSameNotes) info += "  (mismas notas)";
     } else {
         info = "Confianza " + pct(r.candidates.empty() ? 0.f : r.candidates[0].confidence);
-        if (r.candidates.size() > 1) {
-            info += "   |   alternativas: ";
-            for (std::size_t i = 1; i < r.candidates.size() && i < 3; ++i) info += juce::String(skale::keyName(r.candidates[i].key, false)) + "  ";
+        if (r.candidates.size() > 1) {   // la 2ª siempre a la vista, en pequeño
+            info += juce::String::fromUTF8("   |   también posible: ") + juce::String(r.secondKeyName) + " (" + pct(r.candidates[1].confidence) + ")";
+            if (r.secondSameNotes) info += ", mismas notas";
         }
     }
     info += juce::String::formatted("   |   %d:%02d", int(r.durationSeconds) / 60, int(r.durationSeconds) % 60);

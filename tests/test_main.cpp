@@ -258,6 +258,9 @@ void testDoubtful() {
     const SongAnalysis c = analyze(song.data(), song.size(), kRate);
     CHECK(c.valid && !c.doubtful, "Do mayor sintético claro no es dudoso (2ª %.2f, 1ª %.2f)",
           c.candidates.size() > 1 ? double(c.candidates[1].confidence) : 0.0, double(c.candidates[0].confidence));
+    CHECK(!c.secondKeyName.empty() && c.secondScaleNotes.size() == 7 &&
+          (c.secondKey.tonic != c.key.tonic || c.secondKey.mode != c.key.mode),
+          "sin duda también se da la 2ª tonalidad: %s", c.secondKeyName.c_str());
 }
 
 void testChords() {
@@ -355,9 +358,10 @@ void testKeyTracker() {
         CHECK(s.valid && s.key.tonic == 2 && s.key.mode == Mode::Minor, "Re menor: %s", s.keyName.c_str());
     }
     {
-        // Cambio de tonalidad: con memoria de 8 s, tras 40 s en Sol mayor ya no manda el Do mayor anterior.
+        // Cambio de tonalidad: con memoria de 8 s (método clásico y redes), tras 40 s en Sol mayor ya no manda el Do mayor anterior.
         TrackerOptions o;
         o.halfLifeSeconds = 8;
+        o.netHalfLifeSeconds = 8;
         KeyTracker t(kRate, o);
         feed(t, synthSong(majorProgression(0), 2.0, 4));
         CHECK(t.snapshot().key.tonic == 0, "primero Do mayor");

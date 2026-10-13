@@ -1,9 +1,12 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
+#include <deque>
 #include <string>
 #include <vector>
 
+#include "analysis/Analyzer.h"
 #include "analysis/ChordDetector.h"
 #include "analysis/Chromagram.h"
 #include "analysis/KeyDetector.h"
@@ -17,6 +20,14 @@ struct TrackerOptions {
     double bassWeight = 1;         // igual que AnalysisOptions::bassWeight
     bool solfege = false;
     std::size_t maxCandidates = 4;
+    // Redes (las mismas que en el análisis de archivos) sobre los últimos netWindowSeconds de audio, cada
+    // netEverySeconds; sus log-probabilidades se promedian con memoria (vida media netHalfLifeSeconds) para no
+    // perder la tonalidad principal en puentes o modulaciones. false = método clásico (perfil + bajo).
+    bool nets = true;
+    double netWindowSeconds = 30;
+    double netEverySeconds = 3;      // ~15 % de un núcleo (cada 1 s, ~47 %)
+    double netHalfLifeSeconds = 120;
+    double doubtRatio = 0.5;       // igual que AnalysisOptions::doubtRatio
 };
 
 struct TrackerSnapshot {
@@ -30,6 +41,11 @@ struct TrackerSnapshot {
     Chroma12 chroma{};             // cromagrama acumulado (suma 1)
     bool hasChord = false;
     std::string chordName;         // acorde que suena ahora, "-" si no hay
+    bool fromNets = false;         // la tonalidad sale de las redes (si no, del método clásico)
+    bool doubtful = false;         // la 2ª tonalidad es casi tan probable: se destacan las dos
+    Key secondKey;                 // 2ª más probable (siempre que haya candidatos)
+    std::string secondKeyName;
+    bool secondSameNotes = false;
 };
 
 // Seguimiento de la tonalidad en tiempo real: se alimenta con bloques de
@@ -44,6 +60,10 @@ public:
     void reset();
 
     TrackerSnapshot snapshot() const;
+    // Para medir: número de pasadas de las redes y log-probabilidades de la última.
+    std::size_t netUpdates() const { return netUpdates_; }
+    const std::array<float, 24>& lastNetLogProbs() const { return lastLp_; }
+    bool netWindowFull() const { return window_.size() >= maxPairs(); }
 
 private:
     TrackerOptions options_;
@@ -55,6 +75,17 @@ private:
     double decay_;                 // factor por fotograma
     double listened_ = 0;
     std::size_t activeFrames_ = 0;
+    // Redes
+    void runNets();
+    std::size_t maxPairs() const { return std::size_t(options_.netWindowSeconds / (2.0 * extractor_.hopSeconds())) + 1; }
+    std::deque<FrameChroma> window_;   // fotogramas emparejados (~0,19 s) de los últimos netWindowSeconds
+    FrameChroma pair_{};
+    int pairCount_ = 0;
+    double sinceNets_ = 0;
+    std::array<double, 24> netSum_{};  // log-probabilidades acumuladas con memoria
+    double netWeight_ = 0;
+    std::size_t netUpdates_ = 0;
+    std::array<float, 24> lastLp_{};
 };
 
 }  // namespace skale

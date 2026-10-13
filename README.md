@@ -26,7 +26,18 @@ Solo hace falta un compilador C++17 y CMake. `third_party/dr_libs` (dr_wav, dr_m
     cmake -S . -B build-plugin -DSKALE_BUILD_PLUGIN=ON
     cmake --build build-plugin -j --target SkalePlugin_VST3 SkalePlugin_Standalone
 
-JUCE (8.0.15) se descarga al configurar; no está en el repo. En Linux hacen falta ALSA, FreeType, Fontconfig y las cabeceras de X11, GL y GTK/WebKit (`libasound2-dev libfreetype-dev libfontconfig1-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxext-dev libgl1-mesa-dev`). El audio pasa sin tocarse: el hilo de audio solo copia muestras a un buffer circular sin bloqueos; otro hilo ejecuta `KeyTracker` (`src/analysis/KeyTracker.*`, sin dependencias de JUCE) con memoria de ~30 s y publica tonalidad, confianza, escala y acorde actual 5 veces por segundo.
+JUCE (8.0.15) se descarga al configurar; no está en el repo. En Linux hacen falta ALSA, FreeType, Fontconfig y las cabeceras de X11, GL y GTK/WebKit (`libasound2-dev libfreetype-dev libfontconfig1-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxext-dev libgl1-mesa-dev`). El audio pasa sin tocarse: el hilo de audio solo copia muestras a un buffer circular sin bloqueos; otro hilo ejecuta `KeyTracker` (`src/analysis/KeyTracker.*`, sin dependencias de JUCE) y publica tonalidad, confianza, escala y acorde actual 5 veces por segundo.
+
+**Directo con redes:** cada 3 s (`TrackerOptions::netEverySeconds`) pasa las mismas redes que el análisis de archivos sobre los últimos 30 s de audio (~15 % de un núcleo del M5; cada 1 s, ~47 %). Mientras esa ventana no está llena se muestra la última respuesta sola (ya ha visto todo el audio); después, la media de todas las respuestas con memoria de vida media 120 s (`netHalfLifeSeconds`), para no perder la tonalidad principal en puentes. Hasta la primera respuesta de las redes (~3 s) se ve la del método clásico (perfil + bajo), marcada como «primera estimación». Medido con `skale-cli --live-eval` (bloques de 512 como el plugin) sobre 500 canciones completas de FMA de prueba y los 837 fragmentos de GTZAN (redes `split_*`; exacta / con la 2ª solo si es dudosa / con la 2ª siempre):
+
+| Instante | Clásico anterior | FMA completas | Clásico anterior | GTZAN |
+|---|---|---|---|---|
+| 10 s | 48,6 | 70,6 / 80,6 / 85,8 | 37,3 | 60,0 / 70,3 / 78,6 |
+| 30 s | 50,2 | 74,8 / 83,4 / 89,4 | 45,3 | 69,0 / 77,0 / 84,5 |
+| 60 s | 49,7 | 77,3 / 84,5 / 90,4 | | |
+| 3 min | 45,1 | 75,2 / 81,5 / 86,9 | | |
+
+Sin memoria (solo los últimos 30 s) se baja al 59 % a los 3 min; empezar la memoria con la ventana llena resta 3–5 puntos en FMA desde 60 s, y usarla también antes resta 3–4 en GTZAN a los 10–30 s.
 
 ![Vista del plugin](docs/plugin.png)
 
@@ -38,7 +49,7 @@ Prueba sin anfitrión ni tarjeta de sonido (pasa un wav por `processBlock` en bl
 
 **Licencia de JUCE:** JUCE se ofrece bajo AGPLv3 o con licencia comercial. Skale es propietario, así que **para distribuir el plugin hace falta la licencia comercial de JUCE** (compilarlo para uso propio no lo requiere). Alternativa sin JUCE: el SDK de VST3 (MIT) o CLAP, con una interfaz propia.
 
-Limitaciones: no hay estado guardado, ni ajuste de la memoria ni de perfil en la interfaz, y el bonus del acorde final no se aplica (en tiempo real no hay final). El plugin no se ha probado en un anfitrión real (DAW) ni con `pluginval`.
+Limitaciones: no hay estado guardado, ni ajuste de la memoria en la interfaz, y el bonus del acorde final no se aplica (en tiempo real no hay final). El plugin no se ha probado en un anfitrión real (DAW) ni con `pluginval`.
 
 ## Línea de comandos
 
@@ -180,7 +191,7 @@ El blues está anotado como menor en el 97 % de los casos (escala de blues sobre
 
 **Comparación con KeyFinder** (libKeyFinder 2.2.8, el detector de Mixxx), mismas pistas, tonalidad exacta: FMA 49,5 % frente a 63,4 % de Skale; partición fija 53,4 % frente a 66,7 %; GTZAN 50,7 % frente a 68,6 % (Skale gana en todos los géneros salvo el blues, 43,9 frente a 35,7). Cuando discrepan, Skale acierta el 52–58 % y KeyFinder el 16–18 %.
 
-**Resultados dudosos: dos tonalidades.** La confianza de las redes está bien calibrada (partición de prueba: con confianza ≥ 0,8 aciertan el 86–91 %, por debajo de 0,3 el 30 %). Cuando la 2ª tonalidad tiene al menos la mitad de probabilidad que la 1ª (`--doubt 0.5`, por defecto; `AnalysisOptions::doubtRatio`), la CLI y el plugin dan las dos («E major o G# minor», con la escala de la segunda si no es la relativa). Pasa en ~1 de cada 4 pistas, y la tonalidad correcta está entre las mostradas el **74,2 %** de las veces (frente al 66,7 % de la primera sola; FMA: 71,0 % frente a 63,4 %). Si solo importan las notas (tonalidad exacta o su relativa), la primera acierta el 74,1 % (FMA 71,6 %). En JSON: `"doubtful"` y `"secondKey"`.
+**Resultados dudosos: dos tonalidades.** La confianza de las redes está bien calibrada (partición de prueba: con confianza ≥ 0,8 aciertan el 86–91 %, por debajo de 0,3 el 30 %). Cuando la 2ª tonalidad tiene al menos la mitad de probabilidad que la 1ª (`--doubt 0.5`, por defecto; `AnalysisOptions::doubtRatio`), la CLI y el plugin destacan las dos («E major o G# minor», con la escala de la segunda si no es la relativa); si no, la segunda se muestra igual, en pequeño («También posible: X»; en JSON `secondKey` va siempre). Con la segunda siempre a la vista, la correcta está entre las dos el 82,4 % en canciones completas de FMA y el 85,1 % en GTZAN. Pasa en ~1 de cada 4 pistas, y la tonalidad correcta está entre las mostradas el **74,2 %** de las veces (frente al 66,7 % de la primera sola; FMA: 71,0 % frente a 63,4 %). Si solo importan las notas (tonalidad exacta o su relativa), la primera acierta el 74,1 % (FMA 71,6 %). En JSON: `"doubtful"` y `"secondKey"`.
 
 **Datos sintéticos de Lakh MIDI (probado, no mejora).** `tools/gen_lakh.py`: de los 178.561 MIDI del [Lakh MIDI Dataset](https://colinraffel.com/projects/lmd/) (CC BY 4.0) se quedan 16.941 fragmentos de 30 s cuya armadura (o su relativa) coincide con la tonalidad calculada sobre las notas, con el bajo en la tónica, en la pieza y en el fragmento; se transponen al azar y se sintetizan con fluidsynth y tres bancos de sonidos libres (GeneralUser GS, MuseScore General, FluidR3Mono), con tempo y reverberación al azar. Las etiquetas son buenas: las redes actuales coinciden en el 95 %, y una red entrenada **solo** con ellos acierta el 54–56 % en FMA (más que el lineal). Pero no mejoran el modelo: mezclados con los datos reales o como preentrenamiento, una semilla dio +0,4–0,6 en FMA en el conjunto y la segunda −0,2 a −0,8; en las redes de cromagrama tampoco ayudan. Las piezas que pasan el filtro son de tonalidad muy clara, justo las que las redes ya aciertan.
 

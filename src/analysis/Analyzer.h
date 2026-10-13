@@ -82,8 +82,9 @@ struct SongAnalysis {
     std::vector<std::string> scaleNotes;    // 7 notas de la tonalidad elegida
     std::vector<DiatonicChord> diatonic;
 
-    // Resultado dudoso (ver AnalysisOptions::doubtRatio): la 2ª tonalidad también es probable. En la partición
-    // de prueba ocurre en ~1 de cada 4 pistas y la correcta está entre las dos mostradas el 74 % de las veces.
+    // Segunda tonalidad más probable: se rellena siempre y se muestra en pequeño («también posible»); con ella,
+    // la correcta está entre las dos el ~82 % (canciones completas de FMA) y el ~85 % (GTZAN). Resultado dudoso
+    // (ver AnalysisOptions::doubtRatio): la 2ª es casi tan probable y se destaca; ocurre en ~1 de cada 4 pistas.
     bool doubtful = false;
     Key secondKey;
     std::string secondKeyName;

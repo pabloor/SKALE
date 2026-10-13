@@ -202,9 +202,9 @@ SongAnalysis analyze(const float* mono, std::size_t n, double sampleRate, const 
     const Speller speller(out.key);
     for (const Note& n2 : speller.scale()) out.scaleNotes.push_back(formatNote(n2, options.solfege));
     out.diatonic = diatonicChords(out.key, options.solfege);
-    if (options.cnn && options.doubtRatio > 0 && candidates.size() > 1 &&
-        candidates[1].confidence >= float(options.doubtRatio) * candidates[0].confidence) {
-        out.doubtful = true;
+    if (candidates.size() > 1) {   // la 2ª se da siempre (con las dos, la correcta está ~82-85 % de las veces)
+        out.doubtful = options.cnn && options.doubtRatio > 0 &&
+                       candidates[1].confidence >= float(options.doubtRatio) * candidates[0].confidence;
         out.secondKey = candidates[1].key;
         out.secondKeyName = skale::keyName(out.secondKey, options.solfege);
         const int rel = out.key.mode == Mode::Major ? 9 : 3;    // tónica de la relativa

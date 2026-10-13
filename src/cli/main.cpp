@@ -1,10 +1,14 @@
+#include <cmath>
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <string>
 
 #include "analysis/Analyzer.h"
 #include "analysis/AudioFile.h"
+#include "analysis/KeyTracker.h"
 
 namespace {
 
@@ -53,8 +57,12 @@ void printText(const skale::SongAnalysis& a, bool timeline) {
         std::printf("Tonalidad:  %s o %s  (dudosa: %.0f%% / %.0f%%%s)\n", a.keyName.c_str(), a.secondKeyName.c_str(),
                     double(a.candidates[0].confidence) * 100, double(a.candidates[1].confidence) * 100,
                     a.secondSameNotes ? ", mismas notas" : "");
-    else
+    else {
         std::printf("Tonalidad:  %s  (confianza %.0f%%)\n", a.keyName.c_str(), double(a.candidates[0].confidence) * 100);
+        if (a.candidates.size() > 1)
+            std::printf("También posible: %s (%.0f%%%s)\n", a.secondKeyName.c_str(), double(a.candidates[1].confidence) * 100,
+                        a.secondSameNotes ? ", mismas notas" : "");
+    }
     if (a.candidates.size() > 1) {
         std::printf("Alternativas:");
         for (std::size_t i = 1; i < a.candidates.size(); ++i) {
@@ -97,7 +105,7 @@ void printJson(const skale::SongAnalysis& a, bool timeline) {
                 jsonString(a.keyName).c_str(), a.key.tonic, a.key.mode == skale::Mode::Major ? "major" : "minor",
                 double(a.candidates[0].confidence));
     std::printf("  \"doubtful\": %s,\n", a.doubtful ? "true" : "false");
-    if (a.doubtful)
+    if (a.candidates.size() > 1)
         std::printf("  \"secondKey\": {\"name\": %s, \"tonic\": %d, \"mode\": \"%s\", \"sameNotes\": %s},\n",
                     jsonString(a.secondKeyName).c_str(), a.secondKey.tonic, a.secondKey.mode == skale::Mode::Major ? "major" : "minor",
                     a.secondSameNotes ? "true" : "false");
@@ -139,7 +147,8 @@ void printJson(const skale::SongAnalysis& a, bool timeline) {
 
 int main(int argc, char** argv) {
     std::string path;
-    bool json = false, timeline = false, features = false;
+    bool json = false, timeline = false, features = false, liveEval = false;
+    double liveEvery = 1;
     const char* framesOut = nullptr;
     const char* specOut = nullptr;
     skale::AnalysisOptions options;
@@ -185,6 +194,10 @@ int main(int argc, char** argv) {
         } else if (!std::strcmp(arg, "--frames") && i + 1 < argc) {
             framesOut = argv[++i];
             options.keepFrames = true;
+        } else if (!std::strcmp(arg, "--live-eval")) {
+            liveEval = true;
+        } else if (!std::strcmp(arg, "--live-every") && i + 1 < argc) {
+            liveEvery = std::atof(argv[++i]);
         } else if (!std::strcmp(arg, "--features")) {
             features = true;
         } else if (!std::strcmp(arg, "--bass-weight") && i + 1 < argc) {
@@ -207,6 +220,57 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    if (liveEval) {
+        // Medición del modo en tiempo real: el KeyTracker del plugin (bloques de 512 muestras), método clásico y redes
+        // cada liveEvery s; las respuestas de las redes se acumulan aquí con varias memorias (vida media 0 = solo la
+        // última ventana, 30, 60, 120 s y sin olvido; con la ventana aún sin llenar, la última sola, como en el KeyTracker). Una línea JSON por instante; al final, el tiempo de CPU.
+        skale::TrackerOptions classicOpt; classicOpt.nets = false;
+        skale::TrackerOptions netOpt; netOpt.netEverySeconds = liveEvery;
+        skale::KeyTracker classic(audio.sampleRate, classicOpt), withNets(audio.sampleRate, netOpt);
+        const double halfLives[] = {0, 30, 60, 120, 1e9};
+        double sum[5][24] = {}, wsum[5] = {};
+        std::size_t seen = 0;
+        const std::size_t n = audio.mono.size(), block = 512;
+        const double marks[] = {5, 10, 20, 30, 60, 120, 180};
+        std::size_t pos = 0;
+        double tClassic = 0, tNets = 0;
+        auto best = [](const double* v) { int b = 0; for (int i = 1; i < 24; ++i) if (v[i] > v[b]) b = i; return b; };
+        for (double t : marks) {
+            const std::size_t end = std::size_t(t * audio.sampleRate);
+            if (end > n) break;
+            for (; pos < end; pos += block) {
+                const std::size_t m = std::min(block, end - pos);
+                auto c0 = std::clock(); classic.process(audio.mono.data() + pos, m);
+                auto c1 = std::clock(); withNets.process(audio.mono.data() + pos, m);
+                auto c2 = std::clock();
+                tClassic += double(c1 - c0) / CLOCKS_PER_SEC; tNets += double(c2 - c1) / CLOCKS_PER_SEC;
+                if (withNets.netUpdates() != seen) {
+                    seen = withNets.netUpdates();
+                    for (int h = 0; h < 5; ++h) {
+                        const double d = halfLives[h] > 0 ? std::pow(0.5, liveEvery / halfLives[h]) : 0.0;
+                        for (int i = 0; i < 24; ++i) sum[h][i] = d * sum[h][i] + withNets.lastNetLogProbs()[std::size_t(i)];
+                        wsum[h] = d * wsum[h] + 1;
+                    }
+                }
+            }
+            const auto a1 = classic.snapshot();
+            std::printf("{\"t\": %.0f, \"classic\": %d, \"nets\": [", t, a1.valid ? a1.key.tonic * 2 + (a1.key.mode == skale::Mode::Minor) : -1);
+            for (int h = 0; h < 5; ++h) {
+                int b = -1, b2 = -1, doubt = 0;
+                if (wsum[h] > 0) {
+                    double v[24];   // con la ventana sin llenar, la última respuesta sola
+                    for (int i = 0; i < 24; ++i)
+                        v[i] = withNets.netWindowFull() ? sum[h][i] / wsum[h] : double(withNets.lastNetLogProbs()[std::size_t(i)]);
+                    b = best(v); double tmp[24]; std::copy(v, v + 24, tmp); tmp[b] = -1e300; b2 = best(tmp);
+                    doubt = std::exp(v[b2] - v[b]) >= 0.5;   // dudosa como en el plugin
+                }
+                std::printf("%s[%d, %d, %d]", h ? ", " : "", b, b2, doubt);
+            }
+            std::printf("]}\n");
+        }
+        std::printf("{\"cpu_classic\": %.3f, \"cpu_nets\": %.3f, \"audio\": %.1f}\n", tClassic, tNets, double(pos) / audio.sampleRate);
+        return 0;
+    }
     const skale::SongAnalysis a = skale::analyze(audio.mono.data(), audio.mono.size(), audio.sampleRate, options);
     if (!a.valid) {
         std::fprintf(stderr, "No se ha podido determinar la tonalidad (¿silencio o audio demasiado corto?)\n");
