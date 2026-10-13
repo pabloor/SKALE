@@ -120,7 +120,10 @@ mejora. Sumar dos juegos de semillas (10 redes) y otras formas de combinar las v
 peso al final) tampoco: ±0,4 en FMA completas. Preentrenamiento autosupervisado (`train_key_cnn.py --ssl`, IIC entre dos trozos de la misma pista con
 desafinación, ecualización y transposición; 24.625 fragmentos de fma_medium; datos borrados) y
 ajuste con `--init`: cada red pierde 1-5 puntos y la de espectro ancha se rompe (FMA 59,3 / GTZAN 67,3 frente
-a 63,6 / 69,5). La transposición ya la cumplen las redes por construcción; agrupar trozos no es la tonalidad. Pixabay y ccMixter bloquean el acceso automático (403 y `robots.txt`): no usarlos.
+a 63,6 / 69,5). La transposición ya la cumplen las redes por construcción; agrupar trozos no es la tonalidad. Regularización y arquitectura (mismas 5 redes, FMA / FMA completas / GTZAN; actual 63,6 / 69,8 / 69,5):
+enmascarado tipo SpecAugment (`--mask 0.5`) 62,0 / 69,5 / 68,5; etiquetas blandas con crédito para quinta,
+relativa y paralela (`--soft 0.15`) 63,1 / 69,5 / 68,9; contexto temporal de ~10 s con convoluciones
+dilatadas en las redes de cromagrama (`--tctx 3`) 63,2 / 70,3 / 69,3. Ninguna mejora. Pixabay y ccMixter bloquean el acceso automático (403 y `robots.txt`): no usarlos.
 
 ## Disco (13-10-2026)
 En `~/skale-datos` quedan solo los conjuntos que se usan (FMAK en fragmentos y completo, Beatport, GiantSteps+,

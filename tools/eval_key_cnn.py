@@ -48,7 +48,7 @@ def main():
         if c.get('spec'):
             m = tkc.KeyNetSpec(ch=c['ch'], hidden=c['hidden']); load = lambda r: np.fromfile(os.path.join(a.spec, r['file']), dtype=np.float32).reshape(-1, 1, 216) * 3.0
         else:
-            ic = c.get('in_ch', 2); m = tkc.KeyNet(ch=c['ch'], hidden=c['hidden'], in_ch=ic, layers=c.get('layers', 3))
+            ic = c.get('in_ch', 2); m = tkc.KeyNet(ch=c['ch'], hidden=c['hidden'], in_ch=ic, layers=c.get('layers', 3), tctx=c.get('tctx', 0))
             load = lambda r, ic=ic: np.sqrt(np.maximum(np.fromfile(os.path.join(a.frames, r['file']), dtype=np.float32).reshape(-1, 4, 36)[:, :ic], 0)) * 3.0
         m.load_state_dict(ck['state']); m.to(dev).eval()
         lp = np.array([tkc.predict(m, load(r), c.get('crop', 128)) for r in M])

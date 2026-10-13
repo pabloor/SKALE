@@ -16,11 +16,13 @@ import torch, torch.nn as nn, torch.nn.functional as F
 
 
 class KeyNet(nn.Module):
-    def __init__(self, ch=16, hidden=64, drop=0.2, in_ch=2, layers=3):
+    def __init__(self, ch=16, hidden=64, drop=0.2, in_ch=2, layers=3, tctx=0):
         super().__init__()
         self.ch = ch; self.in_ch = in_ch; self.nl = layers
         self.c1 = nn.Conv2d(in_ch, ch, (3, 9)); self.c2 = nn.Conv2d(ch, ch, (3, 9)); self.c3 = nn.Conv2d(ch, ch, (3, 9))
         self.bn1 = nn.BatchNorm2d(ch); self.bn2 = nn.BatchNorm2d(ch); self.bn3 = nn.BatchNorm2d(ch)
+        self.tctx = nn.ModuleList([nn.Conv2d(ch, ch, (3, 3), dilation=(2 ** (i + 1), 1)) for i in range(tctx)])
+        self.tbn = nn.ModuleList([nn.BatchNorm2d(ch) for _ in range(tctx)])
         if layers > 3:   # capas extra (solo para experimentos; el exportador a C++ admite 3)
             self.extra = nn.ModuleList([nn.Conv2d(ch, ch, (3, 9)) for _ in range(layers - 3)])
             self.ebn = nn.ModuleList([nn.BatchNorm2d(ch) for _ in range(layers - 3)])
@@ -38,6 +40,10 @@ class KeyNet(nn.Module):
         x = self._conv(x, self.c1, self.bn1); x = self._conv(x, self.c2, self.bn2); x = self._conv(x, self.c3, self.bn3)
         if self.nl > 3:
             for c, b in zip(self.extra, self.ebn): x = self._conv(x, c, b)
+        for c, b in zip(self.tctx, self.tbn):            # contexto temporal: residual, tono circular, dilatada en el tiempo
+            d = c.dilation[0]
+            h = F.pad(F.pad(x, (1, 1, 0, 0), mode='circular'), (0, 0, d, d), mode='replicate')
+            x = x + F.relu(b(c(h)))
         f = torch.cat([x.mean(2), x.amax(2)], dim=1)       # (B, 2ch, 36)
         r = f[:, :, self.rot]                              # (B, 2ch, 36, 36): girado a cada posición
         r = r.permute(0, 2, 1, 3).reshape(x.shape[0], 36, -1)
@@ -165,6 +171,31 @@ def random_eq(xs, rng, spec):
     return xs * g
 
 
+def random_mask(xs, rng, spec):
+    """SpecAugment: hasta 2 franjas de tiempo (≤ 1/8 de la ventana) y 2 de frecuencia (≤ 1/6 de los bins) a cero,
+    distintas en cada ejemplo."""
+    xs = xs.clone(); B, C, T, Fq = xs.shape
+    for b in range(B):
+        for _ in range(2):
+            w = int(rng.integers(0, T // 8 + 1)); t0 = int(rng.integers(0, T - w + 1)); xs[b, :, t0:t0 + w] = 0
+            w = int(rng.integers(0, Fq // 6 + 1)); f0 = int(rng.integers(0, Fq)); idx = [(f0 + k) % Fq for k in range(w)]
+            xs[b, :, :, idx] = 0
+    return xs
+
+
+def soft_targets(ys, s):
+    """(1 - s) en la tonalidad y s repartido: quintas arriba y abajo (mismo modo) 0,3 cada una, relativa 0,25,
+    paralela 0,15. ys: índices tónica*2 + modo."""
+    t = torch.zeros(len(ys), 24)
+    for i, y in enumerate(ys):
+        tn, m = int(y) // 2, int(y) % 2
+        t[i, y] = 1 - s
+        t[i, ((tn + 7) % 12) * 2 + m] += 0.3 * s; t[i, ((tn + 5) % 12) * 2 + m] += 0.3 * s
+        rel = ((tn + 9) % 12) * 2 + 1 if m == 0 else ((tn + 3) % 12) * 2
+        t[i, rel] += 0.25 * s; t[i, tn * 2 + (1 - m)] += 0.15 * s
+    return t
+
+
 def pick_device(name='auto'):
     if name != 'auto': return torch.device(name)
     if torch.cuda.is_available(): return torch.device('cuda')
@@ -229,6 +260,9 @@ def main():
     ap.add_argument('--spec', default='', help='carpeta con espectros logarítmicos (skale-cli --spec): usa KeyNetSpec')
     ap.add_argument('--eval-only', default='gtzan,fma_full_test', help='grupos que nunca se usan para entrenar, ni con --all (solo evaluación)')
     ap.add_argument('--exclude', default='', help='JSON con [grupo, nombre] que no se usan para entrenar (p. ej. etiquetas dudosas)')
+    ap.add_argument('--mask', type=float, default=0.0, help='probabilidad de enmascarar franjas de tiempo y frecuencia (SpecAugment) por lote')
+    ap.add_argument('--soft', type=float, default=0.0, help='etiquetas blandas: masa para la quinta, la relativa y la paralela (p. ej. 0.15)')
+    ap.add_argument('--tctx', type=int, default=0, help='capas de contexto temporal (convoluciones dilatadas 2, 4, 8...) en las redes de cromagrama')
     ap.add_argument('--ssl', default='', help='preentrenamiento autosupervisado con este manifiesto sin etiquetas (IIC entre dos trozos de la misma pista)')
     ap.add_argument('--max-frames', type=int, default=0, help='recorta cada pista a sus N fotogramas centrales (memoria; 0 = no)')
     ap.add_argument('--init', default='', help='parte de los pesos de otro modelo (.pt de la misma arquitectura), p. ej. preentrenado')
@@ -268,7 +302,8 @@ def main():
     cfg = dict(ch=a.ch, hidden=a.hidden, drop=a.drop, in_ch=in_ch, layers=a.layers, crop=a.crop)
     if a.both: model = KeyNetBoth(ch=a.ch, hidden=a.hidden, drop=a.drop, in_ch=in_ch)
     elif a.spec: model = KeyNetSpec(ch=a.ch, hidden=a.hidden, drop=a.drop)
-    else: model = KeyNet(ch=a.ch, hidden=a.hidden, drop=a.drop, in_ch=in_ch, layers=a.layers)
+    else: model = KeyNet(ch=a.ch, hidden=a.hidden, drop=a.drop, in_ch=in_ch, layers=a.layers, tctx=a.tctx)
+    if a.tctx: cfg['tctx'] = a.tctx
     if a.both: cfg['both'] = True
     elif a.spec: cfg['spec'] = True
     if a.init: model.load_state_dict(torch.load(a.init, map_location='cpu', weights_only=False)['state'])
@@ -311,7 +346,12 @@ def main():
             if a.spec and rng.random() < 0.5:   # además, transposición de ±1-2 semitonos (en el espectro no es circular)
                 k = int(rng.choice([-6, -3, 3, 6])); xs = torch.roll(xs, k, dims=3); ys = ((ys // 2 + k // 3) % 12) * 2 + ys % 2
             if a.eq and rng.random() < a.eq: xs = random_eq(xs, rng, a.spec)
-            loss = F.cross_entropy(model(xs.to(dev)), torch.from_numpy(ys).long().to(dev), label_smoothing=0.05)
+            if a.mask and rng.random() < a.mask: xs = random_mask(xs, rng, a.spec)
+            if a.soft:
+                tgt = 0.95 * soft_targets(ys, a.soft) + 0.05 / 24
+                loss = -(tgt.to(dev) * F.log_softmax(model(xs.to(dev)), 1)).sum(1).mean()
+            else:
+                loss = F.cross_entropy(model(xs.to(dev)), torch.from_numpy(ys).long().to(dev), label_smoothing=0.05)
             opt.zero_grad(); loss.backward(); opt.step(); sched.step(); loss_sum += loss.item()
         msg = f'época {ep + 1}/{a.epochs}  pérdida {loss_sum / a.steps:.3f}  {time.time() - t0:.0f}s'
         if ts and ((ep + 1) % 5 == 0 or ep == a.epochs - 1):
