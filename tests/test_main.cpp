@@ -368,6 +368,15 @@ void testKeyTracker() {
         feed(t, synthSong(majorProgression(7), 2.0, 5));
         const auto s = t.snapshot();
         CHECK(s.key.tonic == 7 && s.key.mode == Mode::Major, "después Sol mayor: %s", s.keyName.c_str());
+
+        // Con una histéresis enorme la mostrada no cambia, y la nueva va de 2ª.
+        o.netHysteresis = 100;
+        KeyTracker h(kRate, o);
+        feed(h, synthSong(majorProgression(0), 2.0, 4));
+        feed(h, synthSong(majorProgression(7), 2.0, 5));
+        const auto sh = h.snapshot();
+        CHECK(sh.key.tonic == 0 && sh.secondKey.tonic == 7, "histéresis: sigue Do, 2ª Sol: %s / %s", sh.keyName.c_str(),
+              sh.secondKeyName.c_str());
     }
     {
         KeyTracker t(kRate);

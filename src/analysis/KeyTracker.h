@@ -27,6 +27,9 @@ struct TrackerOptions {
     double netWindowSeconds = 30;
     double netEverySeconds = 3;      // ~28 % de un núcleo del M5 con las 7 redes (~15 % con las 5 anteriores)
     double netHalfLifeSeconds = 120;
+    // Estabilidad: la tonalidad mostrada solo cambia si la nueva la supera en esta log-probabilidad media (mientras
+    // tanto, la nueva va de 2ª). Con 0,3, la mitad de cambios por minuto con el mismo acierto. 0 = sin histéresis.
+    double netHysteresis = 0.3;
     double doubtRatio = 0.5;       // igual que AnalysisOptions::doubtRatio
 };
 
@@ -77,6 +80,8 @@ private:
     std::size_t activeFrames_ = 0;
     // Redes
     void runNets();
+    std::array<double, 24> netView() const;   // log-probabilidades que se muestran (última o con memoria)
+    int shown_ = -1;                   // tonalidad mostrada (tónica*2 + menor), -1 al principio
     std::size_t maxPairs() const { return std::size_t(options_.netWindowSeconds / (2.0 * extractor_.hopSeconds())) + 1; }
     std::deque<FrameChroma> window_;   // fotogramas emparejados (~0,19 s) de los últimos netWindowSeconds
     FrameChroma pair_{};

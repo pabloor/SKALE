@@ -41,6 +41,8 @@ JUCE (8.0.15) se descarga al configurar; no está en el repo. En Linux hacen fal
 
 Sin memoria (solo los últimos 30 s) se baja al 59 % a los 3 min; empezar la memoria con la ventana llena resta 3–5 puntos en FMA desde 60 s, y usarla también antes resta 3–4 en GTZAN a los 10–30 s.
 
+**Estabilidad:** la tonalidad mostrada solo cambia cuando la nueva la supera en 0,3 de log-probabilidad media (`netHysteresis`); mientras, la nueva aparece como segunda. Simulado con las respuestas volcadas (`skale-cli --live-dump`): con 0,4, los cambios por minuto bajan de 0,33 a 0,18 en FMA y de 1,26 a 0,64 en GTZAN con el mismo acierto (±1). Probado sin mejora: ventanas de 45 y 60 s (±1 punto, más CPU), pesar cada respuesta por su confianza (ruido) y memoria de 240 s (+0,6–0,9 a los 3 min, pero tarda el doble en seguir una modulación).
+
 ![Vista del plugin](docs/plugin.png)
 
 **Archivos:** arrastra un wav, aiff, flac, ogg o mp3 sobre la ventana (o pulsa «Abrir archivo...») y se analiza entero en un hilo aparte con el mismo análisis que la CLI (final y bajo incluidos): tonalidad con confianza y alternativas, escala, acordes de la tonalidad y los acordes más usados (con * los ajenos a la tonalidad). «Volver al directo» regresa a la vista en tiempo real. Si el archivo no se puede leer o es silencio, lo dice. `SkalePluginSelfTest --file audio.mp3 captura.png` lo prueba sin interfaz gráfica.
