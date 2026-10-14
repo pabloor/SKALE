@@ -26,7 +26,9 @@ memoria de vida media 120 s (acumulada desde el principio). La 2ª tonalidad se 
 en pequeño) y se destaca si es dudosa. Medir: `skale-cli audio --live-eval [--live-every 3]` (scripts en
 `~/skale-runs/live/medir4.py`, resultado en `resultado4.txt`). A los 30 s: FMA completas 74,8 % (89,4 % con la
 2ª), GTZAN 69,0 % (84,5 %); a los 3 min FMA 75,2 % (86,9 %). El método clásico anterior: 45–50 %.
-Histéresis 0,3 (`netHysteresis`): la mitad de cambios por minuto con el mismo acierto. Para probar variantes sin
+Histéresis 0,3 (`netHysteresis`): la mitad de cambios por minuto con el mismo acierto. Con las 7 redes y la
+histéresis (simulado, `~/skale-runs/live/sim7.txt`): FMA 75,2 % a los 30 s (89,8 % con la 2ª) y 77,2 % a los
+3 min (88,0 %); GTZAN 69,5 % (85,2 %) a los 30 s; 0,19 cambios/min en FMA (0,34 sin histéresis). Para probar variantes sin
 recalcular redes: `skale-cli --live-dump [--live-window S]` vuelca cada respuesta y `~/skale-runs/live/sim.py`
 simula memoria, pesos e histéresis. Probado sin mejora: ventanas de 45/60 s, peso por confianza, memoria 240 s.
 

@@ -30,14 +30,17 @@ El AU (solo macOS; Logic Pro y GarageBand solo cargan AU) se instala copiando `b
 
 JUCE (8.0.15) se descarga al configurar; no está en el repo. En Linux hacen falta ALSA, FreeType, Fontconfig y las cabeceras de X11, GL y GTK/WebKit (`libasound2-dev libfreetype-dev libfontconfig1-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxext-dev libgl1-mesa-dev`). El audio pasa sin tocarse: el hilo de audio solo copia muestras a un buffer circular sin bloqueos; otro hilo ejecuta `KeyTracker` (`src/analysis/KeyTracker.*`, sin dependencias de JUCE) y publica tonalidad, confianza, escala y acorde actual 5 veces por segundo.
 
-**Directo con redes:** cada 3 s (`TrackerOptions::netEverySeconds`) pasa las mismas redes que el análisis de archivos sobre los últimos 30 s de audio (con las 7 redes, ~28 % de un núcleo del M5 en un hilo aparte, nunca en el de audio; con las 5 anteriores, ~15 %). Mientras esa ventana no está llena se muestra la última respuesta sola (ya ha visto todo el audio); después, la media de todas las respuestas con memoria de vida media 120 s (`netHalfLifeSeconds`), para no perder la tonalidad principal en puentes. Hasta la primera respuesta de las redes (~3 s) se ve la del método clásico (perfil + bajo), marcada como «primera estimación». Medido con `skale-cli --live-eval` (bloques de 512 como el plugin) sobre 500 canciones completas de FMA de prueba y los 837 fragmentos de GTZAN (las 5 redes `split_*` anteriores a las de atención; exacta / con la 2ª solo si es dudosa / con la 2ª siempre):
+**Directo con redes:** cada 3 s (`TrackerOptions::netEverySeconds`) pasa las mismas redes que el análisis de archivos sobre los últimos 30 s de audio (con las 7 redes, ~28 % de un núcleo del M5 en un hilo aparte, nunca en el de audio; con las 5 anteriores, ~15 %). Mientras esa ventana no está llena se muestra la última respuesta sola (ya ha visto todo el audio); después, la media de todas las respuestas con memoria de vida media 120 s (`netHalfLifeSeconds`), para no perder la tonalidad principal en puentes. Hasta la primera respuesta de las redes (~3 s) se ve la del método clásico (perfil + bajo), marcada como «primera estimación». Medido con `skale-cli --live-eval` (bloques de 512 como el plugin) sobre 500 canciones completas de FMA de prueba y los 837 fragmentos de GTZAN (redes `split_*`; exacta / con la 2ª, que se muestra siempre). Con las 7 redes actuales y la histéresis, simulado con `--live-dump` sobre las mismas pistas:
 
 | Instante | Clásico anterior | FMA completas | Clásico anterior | GTZAN |
 |---|---|---|---|---|
-| 10 s | 48,6 | 70,6 / 80,6 / 85,8 | 37,3 | 60,0 / 70,3 / 78,6 |
-| 30 s | 50,2 | 74,8 / 83,4 / 89,4 | 45,3 | 69,0 / 77,0 / 84,5 |
-| 60 s | 49,7 | 77,3 / 84,5 / 90,4 | | |
-| 3 min | 45,1 | 75,2 / 81,5 / 86,9 | | |
+| 10 s | 48,6 | 72,4 / 85,8 | 37,3 | 59,5 / 78,5 |
+| 30 s | 50,2 | 75,2 / 89,8 | 45,3 | 69,5 / 85,2 |
+| 60 s | 49,7 | 77,7 / 90,8 | | |
+| 2 min | 45,3 | 74,6 / 86,3 | | |
+| 3 min | 45,1 | 77,2 / 88,0 | | |
+
+Con las 5 redes anteriores y sin histéresis (medido en C++ con `--live-eval`): 74,8 / 89,4 a los 30 s y 75,2 / 86,9 a los 3 min en FMA; 69,0 / 84,5 en GTZAN a los 30 s.
 
 Sin memoria (solo los últimos 30 s) se baja al 59 % a los 3 min; empezar la memoria con la ventana llena resta 3–5 puntos en FMA desde 60 s, y usarla también antes resta 3–4 en GTZAN a los 10–30 s.
 
