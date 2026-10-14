@@ -23,6 +23,7 @@ void usage() {
                  "  --hpss            separa armonía y percusión antes del cromagrama (experimental)\n"
                  "  --spec <archivo.bin>       vuelca el espectro logarítmico por fotograma (float32 [n][216])\n"
                  "  --frames <archivo.bin>     vuelca la serie de cromagramas finos (float32, para redes)\n"
+                 "  --frame-times <archivo.bin> vuelca el instante (s) de cada fotograma de --frames/--spec (float32 [n])\n"
                  "  --features        volcado de cromagramas y uso de acordes (JSON, para experimentos)\n"
                  "  --timeline        muestra la línea de tiempo de acordes\n"
                  "  --solfege         Do Re Mi en lugar de C D E\n"
@@ -148,9 +149,11 @@ void printJson(const skale::SongAnalysis& a, bool timeline) {
 int main(int argc, char** argv) {
     std::string path;
     bool json = false, timeline = false, features = false, liveEval = false;
-    double liveEvery = 1;
+    double liveEvery = 1, liveWindow = 30;
+    bool liveDump = false;
     const char* framesOut = nullptr;
     const char* specOut = nullptr;
+    const char* timesOut = nullptr;
     skale::AnalysisOptions options;
 
     for (int i = 1; i < argc; ++i) {
@@ -191,6 +194,9 @@ int main(int argc, char** argv) {
         } else if (!std::strcmp(arg, "--spec") && i + 1 < argc) {
             specOut = argv[++i];
             options.keepFrames = true;
+        } else if (!std::strcmp(arg, "--frame-times") && i + 1 < argc) {
+            timesOut = argv[++i];
+            options.keepFrames = true;
         } else if (!std::strcmp(arg, "--frames") && i + 1 < argc) {
             framesOut = argv[++i];
             options.keepFrames = true;
@@ -198,6 +204,10 @@ int main(int argc, char** argv) {
             liveEval = true;
         } else if (!std::strcmp(arg, "--live-every") && i + 1 < argc) {
             liveEvery = std::atof(argv[++i]);
+        } else if (!std::strcmp(arg, "--live-window") && i + 1 < argc) {
+            liveWindow = std::atof(argv[++i]);
+        } else if (!std::strcmp(arg, "--live-dump")) {
+            liveDump = true;
         } else if (!std::strcmp(arg, "--features")) {
             features = true;
         } else if (!std::strcmp(arg, "--bass-weight") && i + 1 < argc) {
@@ -220,6 +230,24 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    if (liveDump) {
+        // Volcado para simular el modo en tiempo real fuera de C++: cada respuesta de las redes del KeyTracker
+        // (ventana liveWindow s, cada liveEvery s; bloques de 512), con el instante, si la ventana está llena y las
+        // 24 log-probabilidades. Hasta 240 s de audio.
+        skale::TrackerOptions o; o.netEverySeconds = liveEvery; o.netWindowSeconds = liveWindow;
+        skale::KeyTracker tr(audio.sampleRate, o);
+        const std::size_t n = std::min(audio.mono.size(), std::size_t(240 * audio.sampleRate)), block = 512;
+        std::size_t seen = 0;
+        for (std::size_t pos = 0; pos < n; pos += block) {
+            tr.process(audio.mono.data() + pos, std::min(block, n - pos));
+            if (tr.netUpdates() == seen) continue;
+            seen = tr.netUpdates();
+            std::printf("{\"t\": %.2f, \"full\": %d, \"lp\": [", double(pos + block) / audio.sampleRate, tr.netWindowFull() ? 1 : 0);
+            for (int i = 0; i < 24; ++i) std::printf("%s%.4f", i ? ", " : "", double(tr.lastNetLogProbs()[std::size_t(i)]));
+            std::printf("]}\n");
+        }
+        return 0;
+    }
     if (liveEval) {
         // Medición del modo en tiempo real: el KeyTracker del plugin (bloques de 512 muestras), método clásico y redes
         // cada liveEvery s; las respuestas de las redes se acumulan aquí con varias memorias (vida media 0 = solo la
@@ -277,6 +305,13 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    if (timesOut) {
+        std::FILE* fh = std::fopen(timesOut, "wb");
+        if (!fh) { std::fprintf(stderr, "no se pudo escribir %s\n", timesOut); return 1; }
+        for (const auto& f : a.frames) { const float t = float(f.time); std::fwrite(&t, sizeof(float), 1, fh); }
+        std::fclose(fh);
+        if (!specOut && !framesOut) return 0;
+    }
     if (specOut) {
         // Espectro logarítmico por fotograma: float32 [n][216].
         std::FILE* fh = std::fopen(specOut, "wb");

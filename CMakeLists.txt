@@ -58,13 +58,17 @@ if(SKALE_BUILD_PLUGIN)
     GIT_SHALLOW TRUE)
   FetchContent_MakeAvailable(JUCE)
 
+  set(SKALE_FORMATS VST3 Standalone)
+  if(APPLE)
+    list(APPEND SKALE_FORMATS AU)   # Logic Pro y GarageBand solo cargan AU
+  endif()
   juce_add_plugin(SkalePlugin
     PRODUCT_NAME "Skale"
     BUNDLE_ID com.pabloolivares.skale
     COMPANY_NAME "Pablo Olivares"
     PLUGIN_MANUFACTURER_CODE Pabo
     PLUGIN_CODE Skal
-    FORMATS VST3 Standalone
+    FORMATS ${SKALE_FORMATS}
     IS_SYNTH FALSE
     NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE

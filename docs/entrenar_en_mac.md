@@ -60,6 +60,9 @@ python tools/train_key_cnn.py $D/frames4/manifest.json $D/frames4 --channels 4 -
     --split tools/samples/test_split.json --seed 1 --out c4.pt
 python tools/train_key_cnn.py $D/frames4/manifest.json $D/frames4 --channels 4 --crop 256 --epochs 30 --steps 100 \
     --split tools/samples/test_split.json --seed 3 --out c4l.pt
+# redes con atención entre fotogramas (la de ~48 s con --crop 256 --seed 3)
+python tools/train_key_cnn.py $D/frames4/manifest.json $D/frames4 --channels 4 --eq 0.5 --attn 2 --epochs 30 --steps 100 \
+    --split tools/samples/test_split.json --seed 1 --out a4.pt
 
 # acierto por grupo, solas y combinadas como en el analizador
 python tools/eval_key_cnn.py $D/frames4/manifest.json $D/frames4 --spec $D/spec c2.pt c4.pt c4l.pt sp1.pt
@@ -95,8 +98,9 @@ Cuando una combinación sea mejor, se reentrenan esas mismas configuraciones con
 (`--all` en lugar de `--split ...`), se exportan y se compila:
 
 ```sh
-python tools/export_key_cnn.py models/final_c2.pt models/final_c4.pt models/final_c4_long.pt \
-    models/final_spec.pt models/final_spec_w24.pt --spec-weight 0.5   # el modelo actual
+python tools/export_key_cnn.py models/final_c2_full.pt models/final_c4_full.pt models/final_c4_long_full.pt \
+    models/final_a4_full.pt models/final_a4_long_full.pt models/final_spec_full.pt models/final_spec_w24_full.pt \
+    --spec-weight 0.5   # el modelo actual
 cmake --build build -j && ./build/skale_tests
 git add src/analysis/KeyCnnWeights.h && git commit -m "Nuevos pesos de las redes" && git push
 ```

@@ -63,6 +63,7 @@ struct FrameChroma {
     Chroma36 mid{};
     Chroma36 high{};
     LogSpec spec{};
+    double time = 0;     // segundos: media de los centros de los dos fotogramas
 };
 
 struct SongAnalysis {

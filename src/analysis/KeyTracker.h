@@ -25,7 +25,7 @@ struct TrackerOptions {
     // perder la tonalidad principal en puentes o modulaciones. false = método clásico (perfil + bajo).
     bool nets = true;
     double netWindowSeconds = 30;
-    double netEverySeconds = 3;      // ~15 % de un núcleo (cada 1 s, ~47 %)
+    double netEverySeconds = 3;      // ~28 % de un núcleo del M5 con las 7 redes (~15 % con las 5 anteriores)
     double netHalfLifeSeconds = 120;
     double doubtRatio = 0.5;       // igual que AnalysisOptions::doubtRatio
 };

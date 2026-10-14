@@ -16,8 +16,9 @@ import torch, torch.nn as nn, torch.nn.functional as F
 
 
 class KeyNet(nn.Module):
-    def __init__(self, ch=16, hidden=64, drop=0.2, in_ch=2, layers=3, tctx=0):
+    def __init__(self, ch=16, hidden=64, drop=0.2, in_ch=2, layers=3, tctx=0, aux=False):
         super().__init__()
+        if aux: self.auxc = nn.Conv2d(ch, 2, 1)           # tarea auxiliar (--aux): notas y bajo por fotograma
         self.ch = ch; self.in_ch = in_ch; self.nl = layers
         self.c1 = nn.Conv2d(in_ch, ch, (3, 9)); self.c2 = nn.Conv2d(ch, ch, (3, 9)); self.c3 = nn.Conv2d(ch, ch, (3, 9))
         self.bn1 = nn.BatchNorm2d(ch); self.bn2 = nn.BatchNorm2d(ch); self.bn3 = nn.BatchNorm2d(ch)
@@ -36,6 +37,13 @@ class KeyNet(nn.Module):
         x = F.pad(x, (0, 0, 1, 1), mode='replicate')      # tiempo
         return F.relu(bn(conv(x)))
 
+    def aux_logits(self, x):
+        """Logits por fotograma de las 12 clases de nota que suenan y de la nota del bajo: (B, 2, T, 12). Salen de las
+        mismas convoluciones que la tonalidad (bin 3n = nota n), así que la tarea auxiliar las obliga a separar notas."""
+        x = self._conv(x, self.c1, self.bn1); x = self._conv(x, self.c2, self.bn2); x = self._conv(x, self.c3, self.bn3)
+        a = self.auxc(x)
+        return torch.stack([torch.logsumexp(a[..., [(3 * n - 1) % 36, 3 * n, 3 * n + 1]], -1) for n in range(12)], -1)
+
     def forward(self, x):                                  # x: (B, 2, T, 36)
         x = self._conv(x, self.c1, self.bn1); x = self._conv(x, self.c2, self.bn2); x = self._conv(x, self.c3, self.bn3)
         if self.nl > 3:
@@ -51,6 +59,48 @@ class KeyNet(nn.Module):
         s = torch.stack([torch.logsumexp(torch.stack([s[:, (3 * t - 1) % 36], s[:, 3 * t], s[:, (3 * t + 1) % 36]], 0), 0)
                          for t in range(12)], dim=1)       # (B, 12, 2)
         return s.reshape(x.shape[0], 24)
+
+
+class KeyNetAttn(KeyNet):
+    """KeyNet con atención entre fotogramas (experimental). Tras las 3 convoluciones, `attn` capas de atención en las
+    que cada fotograma es un elemento con sus 36 posiciones de tono x d canales: consultas, claves y valores salen de
+    la misma proyección lineal en cada posición y la puntuación suma sobre todas ellas, así que la atención no cambia
+    al transponer y la salida se transpone con la entrada (equivariante). Después, agrupación por atención en el
+    tiempo (pesos por fotograma a partir de características invariantes) más el máximo, y la cabeza de KeyNet."""
+    def __init__(self, ch=16, hidden=64, drop=0.2, in_ch=2, attn=2, d=32, heads=4):
+        super().__init__(ch=ch, hidden=hidden, drop=drop, in_ch=in_ch)
+        self.d = d; self.heads = heads
+        self.inp = nn.Linear(ch, d)
+        self.qkv = nn.ModuleList([nn.Linear(d, 3 * d) for _ in range(attn)])
+        self.proj = nn.ModuleList([nn.Linear(d, d) for _ in range(attn)])
+        self.ff = nn.ModuleList([nn.Sequential(nn.Linear(d, 2 * d), nn.ReLU(), nn.Linear(2 * d, d)) for _ in range(attn)])
+        self.pool = nn.Linear(d, 1)
+        self.out = nn.Linear(d, ch)
+        self.adrop = nn.Dropout(0.1)
+
+    @staticmethod
+    def _norm(h):                                          # RMS sobre (36, d): no depende de la posición de tono
+        return h * torch.rsqrt(h.pow(2).mean(dim=(2, 3), keepdim=True) + 1e-5)
+
+    def forward(self, x):                                  # x: (B, in_ch, T, 36)
+        x = self._conv(x, self.c1, self.bn1); x = self._conv(x, self.c2, self.bn2); x = self._conv(x, self.c3, self.bn3)
+        B, C, T, P = x.shape; H = self.heads; dh = self.d // H
+        h = self.inp(x.permute(0, 2, 3, 1))                # (B, T, 36, d)
+        for qkv, proj, ff in zip(self.qkv, self.proj, self.ff):
+            q, k, v = qkv(self._norm(h)).chunk(3, dim=-1)  # (B, T, 36, d) cada una
+            sh = lambda z: z.reshape(B, T, P, H, dh).permute(0, 3, 1, 2, 4).reshape(B, H, T, P * dh)
+            o = F.scaled_dot_product_attention(sh(q), sh(k), sh(v))          # (B, H, T, 36*dh)
+            o = o.reshape(B, H, T, P, dh).permute(0, 2, 3, 1, 4).reshape(B, T, P, self.d)
+            h = h + self.adrop(proj(o))
+            h = h + self.adrop(ff(self._norm(h)))
+        w = torch.softmax(self.pool(h.mean(2)).squeeze(-1), dim=1)          # (B, T): peso de cada fotograma
+        y = self.out(h).permute(0, 3, 1, 2)                # (B, ch, T, 36)
+        f = torch.cat([(y * w[:, None, :, None]).sum(2), y.amax(2)], dim=1)  # (B, 2ch, 36)
+        r = f[:, :, self.rot].permute(0, 2, 1, 3).reshape(B, 36, -1)
+        s = self.head(r)
+        s = torch.stack([torch.logsumexp(torch.stack([s[:, (3 * t - 1) % 36], s[:, 3 * t], s[:, (3 * t + 1) % 36]], 0), 0)
+                         for t in range(12)], dim=1)
+        return s.reshape(B, 24)
 
 
 class KeyNetSpec(nn.Module):
@@ -148,6 +198,17 @@ def load(manifest, d, channels=2, use=None, spec_dir=None, both=False):
         data.append(dict(group=r['group'], name=r['name'], y=r['label'][0] * 2 + (0 if r['label'][1] == 'major' else 1),
                          x=np.sqrt(np.maximum(a, 0)) * 3.0))         # compresión; (T, 2, 36)
     return data
+
+
+def load_aux(d, frames, channels, use):
+    """Datos de la tarea auxiliar (tools/slakh_notes.py): cromagramas como en load() y notas por fotograma (T, 24)."""
+    out = []
+    for r in json.load(open(os.path.join(d, 'slakh_manifest.json'))):
+        a = np.fromfile(os.path.join(frames, r['file']), dtype=np.float32).reshape(-1, channels, 36)[:, :use or channels]
+        z = np.fromfile(os.path.join(d, 'notes', r['file']), dtype=np.float32).reshape(-1, 24)
+        n = min(len(a), len(z))
+        if n >= 32: out.append(dict(x=np.sqrt(np.maximum(a[:n], 0)) * 3.0, z=z[:n]))
+    return out
 
 
 def crop(x, T, rng):
@@ -263,6 +324,9 @@ def main():
     ap.add_argument('--mask', type=float, default=0.0, help='probabilidad de enmascarar franjas de tiempo y frecuencia (SpecAugment) por lote')
     ap.add_argument('--soft', type=float, default=0.0, help='etiquetas blandas: masa para la quinta, la relativa y la paralela (p. ej. 0.15)')
     ap.add_argument('--tctx', type=int, default=0, help='capas de contexto temporal (convoluciones dilatadas 2, 4, 8...) en las redes de cromagrama')
+    ap.add_argument('--attn', type=int, default=0, help='capas de atención entre fotogramas en la red de cromagrama (KeyNetAttn)')
+    ap.add_argument('--aux', default='', help='carpeta de tools/slakh_notes.py: tarea auxiliar de notas y bajo por fotograma')
+    ap.add_argument('--aux-weight', type=float, default=0.5); ap.add_argument('--aux-batch', type=int, default=32)
     ap.add_argument('--ssl', default='', help='preentrenamiento autosupervisado con este manifiesto sin etiquetas (IIC entre dos trozos de la misma pista)')
     ap.add_argument('--max-frames', type=int, default=0, help='recorta cada pista a sus N fotogramas centrales (memoria; 0 = no)')
     ap.add_argument('--init', default='', help='parte de los pesos de otro modelo (.pt de la misma arquitectura), p. ej. preentrenado')
@@ -302,8 +366,12 @@ def main():
     cfg = dict(ch=a.ch, hidden=a.hidden, drop=a.drop, in_ch=in_ch, layers=a.layers, crop=a.crop)
     if a.both: model = KeyNetBoth(ch=a.ch, hidden=a.hidden, drop=a.drop, in_ch=in_ch)
     elif a.spec: model = KeyNetSpec(ch=a.ch, hidden=a.hidden, drop=a.drop)
-    else: model = KeyNet(ch=a.ch, hidden=a.hidden, drop=a.drop, in_ch=in_ch, layers=a.layers, tctx=a.tctx)
+    elif a.attn: model = KeyNetAttn(ch=a.ch, hidden=a.hidden, drop=a.drop, in_ch=in_ch, attn=a.attn)
+    else: model = KeyNet(ch=a.ch, hidden=a.hidden, drop=a.drop, in_ch=in_ch, layers=a.layers, tctx=a.tctx, aux=bool(a.aux))
+    aux = load_aux(a.aux, a.frames, a.channels, in_ch) if a.aux else []
+    if aux: print(f'tarea auxiliar: {len(aux)} pistas con notas', flush=True)
     if a.tctx: cfg['tctx'] = a.tctx
+    if a.attn: cfg['attn'] = a.attn
     if a.both: cfg['both'] = True
     elif a.spec: cfg['spec'] = True
     if a.init: model.load_state_dict(torch.load(a.init, map_location='cpu', weights_only=False)['state'])
@@ -352,12 +420,25 @@ def main():
                 loss = -(tgt.to(dev) * F.log_softmax(model(xs.to(dev)), 1)).sum(1).mean()
             else:
                 loss = F.cross_entropy(model(xs.to(dev)), torch.from_numpy(ys).long().to(dev), label_smoothing=0.05)
+            if aux:   # notas y bajo: mismos aumentos (desafinación, transposición con las notas, ecualización)
+                xa, za = [], []
+                for j in rng.choice(len(aux), a.aux_batch):
+                    n = len(aux[j]['x']); T = min(a.crop, n); s0 = int(rng.integers(0, n - T + 1))
+                    xa.append(np.resize(aux[j]['x'][s0:s0 + T], (a.crop,) + aux[j]['x'].shape[1:]) if T < a.crop else aux[j]['x'][s0:s0 + T])
+                    za.append(np.resize(aux[j]['z'][s0:s0 + T], (a.crop, 24)) if T < a.crop else aux[j]['z'][s0:s0 + T])
+                xa = torch.from_numpy(np.stack(xa)).permute(0, 2, 1, 3); za = torch.from_numpy(np.stack(za)).reshape(a.aux_batch, a.crop, 2, 12)
+                xa = torch.roll(xa, int(rng.integers(-1, 2)), dims=3)
+                if rng.random() < 0.5:
+                    k = int(rng.choice([-6, -3, 3, 6])); xa = torch.roll(xa, k, dims=3); za = torch.roll(za, k // 3, dims=3)
+                if a.eq and rng.random() < a.eq: xa = random_eq(xa, rng, False)
+                la = F.binary_cross_entropy_with_logits(model.aux_logits(xa.to(dev)), za.permute(0, 2, 1, 3).to(dev))
+                loss = loss + a.aux_weight * la
             opt.zero_grad(); loss.backward(); opt.step(); sched.step(); loss_sum += loss.item()
         msg = f'época {ep + 1}/{a.epochs}  pérdida {loss_sum / a.steps:.3f}  {time.time() - t0:.0f}s'
         if ts and ((ep + 1) % 5 == 0 or ep == a.epochs - 1):
             acc, n = evaluate(); msg += '  | ' + ' '.join(f'{g[:5]}={100 * v:.0f}({n[g]})' for g, v in acc.items())
         print(msg, flush=True)
-    torch.save(dict(state={k: v.cpu() for k, v in model.state_dict().items()}, cfg=cfg), a.out)
+    torch.save(dict(state={k: v.cpu() for k, v in model.state_dict().items() if not k.startswith('auxc.')}, cfg=cfg), a.out)
     json.dump(dict(test=[int(i) for i in ts], names=[[data[i]['group'], data[i]['name']] for i in ts]), open(a.out + '.split.json', 'w'))
 
 

@@ -1,6 +1,6 @@
 # Skale: notas de traspaso para Claude Code
 
-Detector de tonalidad y escala (C++17, sin dependencias) con CLI (`skale-cli`) y plugin JUCE (VST3/AU +
+Detector de tonalidad y escala (C++17, sin dependencias) con CLI (`skale-cli`) y plugin JUCE (VST3, AU +
 aplicación independiente). El usuario habla español: responde en español. Detalles y tablas en `README.md`.
 
 ## Objetivo actual
@@ -10,8 +10,8 @@ GuitarSet 72, GiantSteps+ 51, resto pequeños). Métrica principal: acierto exac
 variada) y en el total; también MIREX (`tools/eval_key_cnn.py`).
 
 ## Cómo analiza ahora (por defecto, `--model ensemble`)
-Log-probabilidades de 24 tonalidades = 0,5 × media de 3 redes de cromagrama entrenadas con ecualización
-aleatoria (`--eq 0.5`) + 0,5 × media de 2 redes de espectro, todas entrenadas también con las canciones
+Log-probabilidades de 24 tonalidades = 0,5 × media de 5 redes de cromagrama entrenadas con ecualización
+aleatoria (`--eq 0.5`; 3 convolucionales y 2 con atención entre fotogramas, `--attn 2`) + 0,5 × media de 2 redes de espectro, todas entrenadas también con las canciones
 completas de FMAK (`--max-frames 1280`) (`src/analysis/KeyCnn.cpp`, pesos en
 `KeyCnnWeights.h`). Con audio de 60 s o más se mezcla 0,85 × redes + 0,15 × lineal (`KeyModelWeights.h`,
 que usa el acorde final); con menos, solo las redes (`cnnWeight`, `cnnWeightLong`, `longSeconds` en
@@ -72,16 +72,25 @@ las demás con `tools/eval_key_cnn.py` (C++ y PyTorch dan lo mismo). La mejora d
 (+1,7 FMA) y la de la ecualización de las redes de cromagrama (+1,0 FMA frente a las mismas redes sin
 ecualizar) se confirmaron con dos juegos de semillas. Con la ecualización el lineal resta y se quitó.
 
+## Redes con atención (lo último que ha funcionado)
+`KeyNetAttn` (`--attn 2`): convoluciones de KeyNet + 2 capas de atención entre fotogramas (equivariante; la
+puntuación suma sobre las 36 posiciones) + agrupación con pesos por fotograma. Añadir 2 (ventanas ~24 y ~48 s)
+a las 5 redes: FMA 63,6 → 64,1 / 63,9, FMA completas 69,8 → 70,0, GTZAN 69,5 → 70,5 / 70,8 (semillas A / B;
+`~/skale-runs/attn`). Con las 4: 63,9 / 70,2 / 71,1 (no compensa el coste). C++ = PyTorch; ≈ 1,7× más CPU.
+El modo en directo (cifras de arriba) se midió con las 5 redes anteriores.
+
 ## Siguiente paso
 Todas las ideas probadas (ver abajo). Con los datos abiertos disponibles el modelo está en su límite; lo único
 con margen es más música real etiquetada a mano: la página `tools/etiquetar.py` está lista (7.389 pistas de
 FMA en `~/skale-datos/fma_user`) si alguien con buen oído puede etiquetar.
 
 ## Modelos entrenados (`models/`, formato {'state','cfg'})
-- **Producción:** `final_c2_full.pt`, `final_c4_full.pt`, `final_c4_long_full.pt`, `final_spec_full.pt`,
-  `final_spec_w24_full.pt` (todos los datos más las canciones completas de FMAK; `--all --eval-only gtzan
-  --max-frames 1280`). Exportar: `tools/export_key_cnn.py models/final_c2_full.pt models/final_c4_full.pt
-  models/final_c4_long_full.pt models/final_spec_full.pt models/final_spec_w24_full.pt --spec-weight 0.5`.
+- **Producción:** `final_c2_full.pt`, `final_c4_full.pt`, `final_c4_long_full.pt`, `final_a4_full.pt`,
+  `final_a4_long_full.pt` (atención; `--channels 4 --eq 0.5 --attn 2`, semilla 1, y `--crop 256`, semilla 3),
+  `final_spec_full.pt`, `final_spec_w24_full.pt` (todos los datos más las canciones completas de FMAK; `--all
+  --eval-only gtzan --max-frames 1280`). Exportar: `tools/export_key_cnn.py models/final_c2_full.pt
+  models/final_c4_full.pt models/final_c4_long_full.pt models/final_a4_full.pt models/final_a4_long_full.pt
+  models/final_spec_full.pt models/final_spec_w24_full.pt --spec-weight 0.5`.
   Sus versiones sin la partición de prueba: `split_*_full.pt`.
 - `final_c2.pt`, `final_c4.pt`, `final_c4_long.pt`: las 3 redes de cromagrama anteriores, sin ecualización.
 - Anteriores (sin canciones completas): `final_c2_eq.pt`, `final_c4_eq.pt`, `final_c4_long_eq.pt` (ecualización
@@ -131,6 +140,11 @@ a 63,6 / 69,5). La transposición ya la cumplen las redes por construcción; agr
 enmascarado tipo SpecAugment (`--mask 0.5`) 62,0 / 69,5 / 68,5; etiquetas blandas con crédito para quinta,
 relativa y paralela (`--soft 0.15`) 63,1 / 69,5 / 68,9; contexto temporal de ~10 s con convoluciones
 dilatadas en las redes de cromagrama (`--tctx 3`) 63,2 / 70,3 / 69,3. Ninguna mejora. Pixabay y ccMixter bloquean el acceso automático (403 y `robots.txt`): no usarlos.
+Tarea auxiliar de notas con Slakh2100 (`tools/get_slakh.py` lee el tar.gz de 104 GB en streaming por rangos,
+`tools/slakh_notes.py` saca las notas por fotograma del MIDI con `skale-cli --frame-times`, `train_key_cnn.py
+--aux`; 300 canciones): la red c4 sola baja (FMA 61,4 → 60,0 con peso 0,5; 59,8 con 0,15) y el conjunto no
+mejora (63,2 / 69,8 / 69,4 y 62,8 / 70,2 / 69,8). Datos borrados. Segunda opción = la paralela cuando es
+bastante probable: blues 57 → 70 % con dos opciones, pero FMA completas −0,7: no (convención del blues en GTZAN).
 
 ## Disco (13-10-2026)
 En `~/skale-datos` quedan solo los conjuntos que se usan (FMAK en fragmentos y completo, Beatport, GiantSteps+,

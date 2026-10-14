@@ -67,6 +67,119 @@ Tensor convReluZero(const Tensor& in, const float* w, const float* b, int cOut, 
     return out;
 }
 
+// out[r][j] = b[j] + sum_i w[j][i] * x[r][i] para rows filas (matrices de PyTorch: (salida, entrada)).
+void linear(const float* x, std::size_t rows, int in, const float* w, const float* b, int outN, float* out) {
+    for (std::size_t r = 0; r < rows; ++r) {
+        const float* xr = x + r * std::size_t(in);
+        float* o = out + r * std::size_t(outN);
+        for (int j = 0; j < outN; ++j) {
+            const float* wj = w + std::size_t(j) * std::size_t(in);
+            float acc = b[j];
+            for (int i = 0; i < in; ++i) acc += wj[i] * xr[i];
+            o[j] = acc;
+        }
+    }
+}
+
+// RMS de cada fotograma sobre (36 posiciones x d canales), como KeyNetAttn._norm.
+void rmsNorm(const std::vector<float>& x, int T, std::size_t per, std::vector<float>& out) {
+    out.resize(x.size());
+    for (int t = 0; t < T; ++t) {
+        const float* xt = x.data() + std::size_t(t) * per;
+        double ms = 0;
+        for (std::size_t i = 0; i < per; ++i) ms += double(xt[i]) * xt[i];
+        const float r = float(1.0 / std::sqrt(ms / double(per) + 1e-5));
+        for (std::size_t i = 0; i < per; ++i) out[std::size_t(t) * per + i] = xt[i] * r;
+    }
+}
+
+// Atención entre fotogramas y agrupación en el tiempo de KeyNetAttn (tools/train_key_cnn.py). h: salida de las
+// convoluciones (ch, T, 36). Escribe f (2ch x 36): media ponderada por la atención y máximo en el tiempo.
+void attentionFeatures(const Tensor& h, const cnn::Net& net, std::vector<float>& f) {
+    const int T = h.t, C = net.ch, D = net.d, H = net.heads, dh = D / H;
+    const std::size_t rows = std::size_t(T) * kP, per = std::size_t(kP) * std::size_t(D);
+    std::vector<float> x(rows * std::size_t(C));                      // (T, 36, ch)
+    for (int c = 0; c < C; ++c)
+        for (int t = 0; t < T; ++t)
+            for (int p = 0; p < kP; ++p) x[(std::size_t(t) * kP + std::size_t(p)) * std::size_t(C) + std::size_t(c)] = h.at(c, t, p);
+    std::vector<float> hs(rows * std::size_t(D)), n, qkv(rows * std::size_t(3 * D)), o(rows * std::size_t(D)),
+        tmp(rows * std::size_t(D)), ff(rows * std::size_t(2 * D)), sc(static_cast<std::size_t>(T)),
+        qh(rows * std::size_t(dh)), kh(rows * std::size_t(dh)), vh(rows * std::size_t(dh)), acc(std::size_t(kP) * std::size_t(dh));
+    linear(x.data(), rows, C, net.inw, net.inb, D, hs.data());
+    const float scale = 1.f / std::sqrt(float(kP * dh));
+    for (int l = 0; l < net.attn; ++l) {
+        rmsNorm(hs, T, per, n);
+        linear(n.data(), rows, D, net.qkvw[l], net.qkvb[l], 3 * D, qkv.data());
+        // por cabeza, consultas, claves y valores contiguos: (T, 36*dh)
+        const std::size_t E = std::size_t(kP) * std::size_t(dh);
+        std::fill(o.begin(), o.end(), 0.f);
+        for (int hh = 0; hh < H; ++hh) {
+            for (int part = 0; part < 3; ++part) {
+                float* dst = part == 0 ? qh.data() : part == 1 ? kh.data() : vh.data();
+                for (int t = 0; t < T; ++t)
+                    for (int p = 0; p < kP; ++p)
+                        std::copy_n(qkv.data() + (std::size_t(t) * kP + std::size_t(p)) * std::size_t(3 * D) + std::size_t(part * D + hh * dh),
+                                    dh, dst + std::size_t(t) * E + std::size_t(p) * std::size_t(dh));
+            }
+            for (int t = 0; t < T; ++t) {
+                const float* qt = qh.data() + std::size_t(t) * E;
+                float mx = -1e30f;
+                for (int s2 = 0; s2 < T; ++s2) {
+                    const float* ks = kh.data() + std::size_t(s2) * E;
+                    float acc = 0.f;
+                    for (std::size_t i = 0; i < E; ++i) acc += qt[i] * ks[i];
+                    sc[std::size_t(s2)] = acc * scale; mx = std::max(mx, sc[std::size_t(s2)]);
+                }
+                float z = 0.f;
+                for (int s2 = 0; s2 < T; ++s2) { sc[std::size_t(s2)] = std::exp(sc[std::size_t(s2)] - mx); z += sc[std::size_t(s2)]; }
+                std::fill(acc.begin(), acc.end(), 0.f);
+                for (int s2 = 0; s2 < T; ++s2) {
+                    const float a = sc[std::size_t(s2)] / z;
+                    const float* vs = vh.data() + std::size_t(s2) * E;
+                    for (std::size_t i = 0; i < E; ++i) acc[i] += a * vs[i];
+                }
+                for (int p = 0; p < kP; ++p)
+                    std::copy_n(acc.data() + std::size_t(p) * std::size_t(dh), dh,
+                                o.data() + (std::size_t(t) * kP + std::size_t(p)) * std::size_t(D) + std::size_t(hh * dh));
+            }
+        }
+        linear(o.data(), rows, D, net.projw[l], net.projb[l], D, tmp.data());
+        for (std::size_t i = 0; i < hs.size(); ++i) hs[i] += tmp[i];
+        rmsNorm(hs, T, per, n);
+        linear(n.data(), rows, D, net.ff1w[l], net.ff1b[l], 2 * D, ff.data());
+        for (float& v : ff) v = v > 0.f ? v : 0.f;
+        linear(ff.data(), rows, 2 * D, net.ff2w[l], net.ff2b[l], D, tmp.data());
+        for (std::size_t i = 0; i < hs.size(); ++i) hs[i] += tmp[i];
+    }
+    // peso de cada fotograma: softmax en el tiempo de pool(media sobre las 36 posiciones)
+    std::vector<float> w(static_cast<std::size_t>(T));
+    float mx = -1e30f;
+    for (int t = 0; t < T; ++t) {
+        float acc = net.poolb[0];
+        for (int j = 0; j < D; ++j) {
+            float m = 0.f;
+            for (int p = 0; p < kP; ++p) m += hs[(std::size_t(t) * kP + std::size_t(p)) * std::size_t(D) + std::size_t(j)];
+            acc += net.poolw[j] * m / float(kP);
+        }
+        w[std::size_t(t)] = acc; mx = std::max(mx, acc);
+    }
+    double z = 0;
+    for (float& v : w) { v = std::exp(v - mx); z += v; }
+    for (float& v : w) v = float(v / z);
+    linear(hs.data(), rows, D, net.outw, net.outb, C, x.data());      // (T, 36, ch)
+    for (int c = 0; c < C; ++c) {
+        for (int p = 0; p < kP; ++p) {
+            float sum = 0.f, m = -1e30f;
+            for (int t = 0; t < T; ++t) {
+                const float v = x[(std::size_t(t) * kP + std::size_t(p)) * std::size_t(C) + std::size_t(c)];
+                sum += w[std::size_t(t)] * v; m = std::max(m, v);
+            }
+            f[std::size_t(c) * kP + std::size_t(p)] = sum;
+            f[std::size_t(C + c) * kP + std::size_t(p)] = m;
+        }
+    }
+}
+
 void logSoftmax(std::array<float, 24>& x) {
     const float m = *std::max_element(x.begin(), x.end());
     double s = 0;
@@ -87,9 +200,10 @@ std::array<float, 24> windowLogProbs(const float* x, const cnn::Net& net) {
     h = convRelu(h, net.c2w, net.c2b, net.ch);
     h = convRelu(h, net.c3w, net.c3b, net.ch);
 
-    // agrupación media y máxima en el tiempo: (2*ch, 36)
+    // agrupación media y máxima en el tiempo: (2*ch, 36); con atención, media ponderada
     std::vector<float> f(std::size_t(2 * net.ch) * kP);
-    for (int c = 0; c < net.ch; ++c) {
+    if (net.attn > 0) attentionFeatures(h, net, f);
+    else for (int c = 0; c < net.ch; ++c) {
         for (int p = 0; p < kP; ++p) {
             float sum = 0.f, mx = h.at(c, 0, p);
             for (int t = 0; t < T; ++t) { const float v = h.at(c, t, p); sum += v; mx = std::max(mx, v); }

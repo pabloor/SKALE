@@ -21,14 +21,16 @@ El extractor funciona en streaming (acepta bloques de cualquier tamaño), pensad
 
 Solo hace falta un compilador C++17 y CMake. `third_party/dr_libs` (dr_wav, dr_mp3) lee wav y mp3.
 
-## Plugin (VST3 y aplicación independiente)
+## Plugin (VST3, AU y aplicación independiente)
 
     cmake -S . -B build-plugin -DSKALE_BUILD_PLUGIN=ON
-    cmake --build build-plugin -j --target SkalePlugin_VST3 SkalePlugin_Standalone
+    cmake --build build-plugin -j --target SkalePlugin_VST3 SkalePlugin_AU SkalePlugin_Standalone
+
+El AU (solo macOS; Logic Pro y GarageBand solo cargan AU) se instala copiando `build-plugin/SkalePlugin_artefacts/Release/AU/Skale.component` a `~/Library/Audio/Plug-Ins/Components/`. Pasa `auval -v aufx Skal Pabo` y pluginval 1.0.4 con exigencia 10 (AU y VST3; en el AU, un aviso de JUCE por no tener presets de fábrica).
 
 JUCE (8.0.15) se descarga al configurar; no está en el repo. En Linux hacen falta ALSA, FreeType, Fontconfig y las cabeceras de X11, GL y GTK/WebKit (`libasound2-dev libfreetype-dev libfontconfig1-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxext-dev libgl1-mesa-dev`). El audio pasa sin tocarse: el hilo de audio solo copia muestras a un buffer circular sin bloqueos; otro hilo ejecuta `KeyTracker` (`src/analysis/KeyTracker.*`, sin dependencias de JUCE) y publica tonalidad, confianza, escala y acorde actual 5 veces por segundo.
 
-**Directo con redes:** cada 3 s (`TrackerOptions::netEverySeconds`) pasa las mismas redes que el análisis de archivos sobre los últimos 30 s de audio (~15 % de un núcleo del M5; cada 1 s, ~47 %). Mientras esa ventana no está llena se muestra la última respuesta sola (ya ha visto todo el audio); después, la media de todas las respuestas con memoria de vida media 120 s (`netHalfLifeSeconds`), para no perder la tonalidad principal en puentes. Hasta la primera respuesta de las redes (~3 s) se ve la del método clásico (perfil + bajo), marcada como «primera estimación». Medido con `skale-cli --live-eval` (bloques de 512 como el plugin) sobre 500 canciones completas de FMA de prueba y los 837 fragmentos de GTZAN (redes `split_*`; exacta / con la 2ª solo si es dudosa / con la 2ª siempre):
+**Directo con redes:** cada 3 s (`TrackerOptions::netEverySeconds`) pasa las mismas redes que el análisis de archivos sobre los últimos 30 s de audio (con las 7 redes, ~28 % de un núcleo del M5 en un hilo aparte, nunca en el de audio; con las 5 anteriores, ~15 %). Mientras esa ventana no está llena se muestra la última respuesta sola (ya ha visto todo el audio); después, la media de todas las respuestas con memoria de vida media 120 s (`netHalfLifeSeconds`), para no perder la tonalidad principal en puentes. Hasta la primera respuesta de las redes (~3 s) se ve la del método clásico (perfil + bajo), marcada como «primera estimación». Medido con `skale-cli --live-eval` (bloques de 512 como el plugin) sobre 500 canciones completas de FMA de prueba y los 837 fragmentos de GTZAN (las 5 redes `split_*` anteriores a las de atención; exacta / con la 2ª solo si es dudosa / con la 2ª siempre):
 
 | Instante | Clásico anterior | FMA completas | Clásico anterior | GTZAN |
 |---|---|---|---|---|
@@ -49,7 +51,7 @@ Prueba sin anfitrión ni tarjeta de sonido (pasa un wav por `processBlock` en bl
 
 **Licencia de JUCE:** JUCE se ofrece bajo AGPLv3 o con licencia comercial. Skale es propietario, así que **para distribuir el plugin hace falta la licencia comercial de JUCE** (compilarlo para uso propio no lo requiere). Alternativa sin JUCE: el SDK de VST3 (MIT) o CLAP, con una interfaz propia.
 
-Limitaciones: no hay estado guardado, ni ajuste de la memoria en la interfaz, y el bonus del acorde final no se aplica (en tiempo real no hay final). El plugin no se ha probado en un anfitrión real (DAW) ni con `pluginval`.
+Limitaciones: no hay estado guardado, ni ajuste de la memoria en la interfaz, y el bonus del acorde final no se aplica (en tiempo real no hay final). El plugin aún no se ha probado dentro de un DAW (solo `auval`, pluginval y la prueba sin interfaz).
 
 ## Línea de comandos
 
@@ -139,6 +141,17 @@ La mejora de añadir las redes de espectro (+1,7 puntos en FMA, +1,5 en total) s
 | …con 0,3 de lineal | 61,2 | 69,9 | 76,4 | 88,2 | 65,2 |
 
 Frente a la versión anterior (66,7 % en total con 0,15 de lineal) el total queda igual, pero FMA, la música más variada, sube +0,8 y el modelo es más simple. Ecualizar también las redes de espectro (curva aleatoria de ±6 dB) no suma nada sobre esto. **Probado sin mejora:** entrenar 3,3 veces más (100 épocas: sobreajusta, una red de cromagrama baja de 57,3 a 53,3 % en FMA) y una red de espectro con ventana de ~48 s (+0,7 con una semilla, −0,6 con otra). Redes finales: `models/final_c2_eq.pt`, `final_c4_eq.pt`, `final_c4_long_eq.pt` (y sus versiones `split_*_eq.pt` sin la partición de prueba).
+
+**Redes con atención entre fotogramas (octubre de 2026).** `KeyNetAttn` (`train_key_cnn.py --attn 2`, ≈ 108.000 parámetros): las mismas 3 convoluciones que la red de cromagrama de 4 bandas y después 2 capas de atención en las que cada fotograma (36 posiciones × 32 canales) mira a todos los demás de la ventana; la puntuación suma sobre las 36 posiciones, así que la red sigue siendo equivariante a la transposición. Agrupa en el tiempo con pesos aprendidos por fotograma en lugar de la media. Solas aciertan como una red convolucional (FMA 59–60 %), pero son **distintas**: añadidas al conjunto (5 redes de cromagrama, 3 convolucionales + 2 con atención, ventanas de ~24 y ~48 s, más las 2 de espectro) mejoran con dos juegos de semillas:
+
+| Conjunto (redes `split_*`, sin lineal) | FMA | FMA completas | GTZAN | Partición fija + GTZAN + FMA completas |
+|---|---|---|---|---|
+| 3 cromagrama + 2 espectro | 63,6 | 69,8 | 69,5 | 68,7 |
+| + 2 con atención (semillas A) | **64,1** | **70,0** | **70,5** | **69,2** |
+| + 2 con atención (semillas B) | 63,9 | 70,0 | 70,8 | 69,1 |
+| + las 4 con atención | 63,9 | 70,2 | 71,1 | 69,3 |
+
+Añadir más redes convolucionales del mismo tipo no daba nada (±0,4). En C++ (`KeyCnn.cpp`) dan lo mismo que en PyTorch (GTZAN 70,5 % con las de las semillas A) y el análisis cuesta ≈ 1,7 veces más (30 s de audio: 1,0 → 1,7 s de CPU). Producción: `models/final_a4_full.pt` y `final_a4_long_full.pt`.
 
 **Piezas completas (modelo actual).** Las mismas 5 redes entrenadas dejando fuera Bach (48), clásica libre (12), piezas con la tonalidad puesta por su autor (40) y Jamendo (103), y un lineal entrenado también sin ellas; 203 piezas de 2 a 6 min, medido con skale-cli:
 
@@ -279,7 +292,7 @@ Con la misma configuración (Temperley, 4 s, 0,5) el peso del final mejora en lo
 ## Hoja de ruta
 
 1. Núcleo del analizador y CLI ✅
-2. Plugin JUCE (VST3 y aplicación independiente) con tiempo real y vista mínima ✅ (AU pendiente: solo macOS)
+2. Plugin JUCE (VST3, AU y aplicación independiente) con tiempo real y vista mínima ✅
 3. Análisis de archivos arrastrados al plugin ✅
 4. Línea de tiempo de acordes en la interfaz
 5. Pulido de UI y empaquetado
