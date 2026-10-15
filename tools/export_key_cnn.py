@@ -44,7 +44,7 @@ def main():
         isSpec = cfg.get('spec', False)
         att = cfg.get('attn', 0)
         if att > 2: raise SystemExit('el exportador admite hasta 2 capas de atención')
-        m = (tkc.KeyNetSpec(ch=cfg['ch'], hidden=cfg['hidden']) if isSpec else
+        m = ((tkc.KeyNetSpecAttn(ch=cfg['ch'], hidden=cfg['hidden'], attn=att) if att else tkc.KeyNetSpec(ch=cfg['ch'], hidden=cfg['hidden'])) if isSpec else
              tkc.KeyNetAttn(ch=cfg.get('ch', 16), hidden=cfg.get('hidden', 64), in_ch=cfg.get('in_ch', 2), attn=att) if att else
              tkc.KeyNet(ch=cfg.get('ch', 16), hidden=cfg.get('hidden', 64), in_ch=cfg.get('in_ch', 2)))
         m.load_state_dict(state); m.eval()

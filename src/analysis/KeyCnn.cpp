@@ -11,6 +11,25 @@ namespace {
 
 constexpr int kP = 36;       // bins de tono
 
+// Peso de cada ventana según dónde cae en la canción: exp(-kPositionDecay * centro / duración). En canciones
+// completas de FMA el principio acierta más (74 % el primer décimo, 58 % el último); con 1 la canción entera pasa de
+// 70,2 a 71,4 % (notas: 77,7 -> 78,7) sin empeorar las piezas de otras fuentes; con pesos más fuertes FMA sube más
+// pero esas piezas bajan (probablemente se ajusta a cómo se anotó FMAK). Con una sola ventana no cambia nada.
+constexpr double kPositionDecay = 1.0;
+
+// Media ponderada de las ventanas (inicio s, longitud T) de una pista de n fotogramas.
+std::vector<float> positionWeights(const std::vector<std::size_t>& starts, std::size_t T, std::size_t n) {
+    std::vector<float> w(starts.size());
+    double z = 0;
+    for (std::size_t i = 0; i < starts.size(); ++i) {
+        const double center = std::min(double(starts[i]) + 0.5 * double(T), double(n)) / double(std::max<std::size_t>(n, 1));
+        w[i] = float(std::exp(-kPositionDecay * center));
+        z += w[i];
+    }
+    for (float& v : w) v = float(v / z);
+    return w;
+}
+
 struct Tensor {              // (canales, tiempo, tono)
     int c, t, p;
     std::vector<float> v;
@@ -93,32 +112,33 @@ void rmsNorm(const std::vector<float>& x, int T, std::size_t per, std::vector<fl
     }
 }
 
-// Atención entre fotogramas y agrupación en el tiempo de KeyNetAttn (tools/train_key_cnn.py). h: salida de las
-// convoluciones (ch, T, 36). Escribe f (2ch x 36): media ponderada por la atención y máximo en el tiempo.
+// Atención entre fotogramas y agrupación en el tiempo de KeyNetAttn y KeyNetSpecAttn (tools/train_key_cnn.py). h: salida
+// de las convoluciones (ch, T, P), P = 36 posiciones de tono o 72 semitonos del espectro. Escribe f (2ch x P): media
+// ponderada por la atención y máximo en el tiempo.
 void attentionFeatures(const Tensor& h, const cnn::Net& net, std::vector<float>& f) {
-    const int T = h.t, C = net.ch, D = net.d, H = net.heads, dh = D / H;
-    const std::size_t rows = std::size_t(T) * kP, per = std::size_t(kP) * std::size_t(D);
-    std::vector<float> x(rows * std::size_t(C));                      // (T, 36, ch)
+    const int T = h.t, P = h.p, C = net.ch, D = net.d, H = net.heads, dh = D / H;
+    const std::size_t rows = std::size_t(T) * P, per = std::size_t(P) * std::size_t(D);
+    std::vector<float> x(rows * std::size_t(C));                      // (T, P, ch)
     for (int c = 0; c < C; ++c)
         for (int t = 0; t < T; ++t)
-            for (int p = 0; p < kP; ++p) x[(std::size_t(t) * kP + std::size_t(p)) * std::size_t(C) + std::size_t(c)] = h.at(c, t, p);
+            for (int p = 0; p < P; ++p) x[(std::size_t(t) * P + std::size_t(p)) * std::size_t(C) + std::size_t(c)] = h.at(c, t, p);
     std::vector<float> hs(rows * std::size_t(D)), n, qkv(rows * std::size_t(3 * D)), o(rows * std::size_t(D)),
         tmp(rows * std::size_t(D)), ff(rows * std::size_t(2 * D)), sc(static_cast<std::size_t>(T)),
-        qh(rows * std::size_t(dh)), kh(rows * std::size_t(dh)), vh(rows * std::size_t(dh)), acc(std::size_t(kP) * std::size_t(dh));
+        qh(rows * std::size_t(dh)), kh(rows * std::size_t(dh)), vh(rows * std::size_t(dh)), acc(std::size_t(P) * std::size_t(dh));
     linear(x.data(), rows, C, net.inw, net.inb, D, hs.data());
-    const float scale = 1.f / std::sqrt(float(kP * dh));
+    const float scale = 1.f / std::sqrt(float(P * dh));
     for (int l = 0; l < net.attn; ++l) {
         rmsNorm(hs, T, per, n);
         linear(n.data(), rows, D, net.qkvw[l], net.qkvb[l], 3 * D, qkv.data());
         // por cabeza, consultas, claves y valores contiguos: (T, 36*dh)
-        const std::size_t E = std::size_t(kP) * std::size_t(dh);
+        const std::size_t E = std::size_t(P) * std::size_t(dh);
         std::fill(o.begin(), o.end(), 0.f);
         for (int hh = 0; hh < H; ++hh) {
             for (int part = 0; part < 3; ++part) {
                 float* dst = part == 0 ? qh.data() : part == 1 ? kh.data() : vh.data();
                 for (int t = 0; t < T; ++t)
-                    for (int p = 0; p < kP; ++p)
-                        std::copy_n(qkv.data() + (std::size_t(t) * kP + std::size_t(p)) * std::size_t(3 * D) + std::size_t(part * D + hh * dh),
+                    for (int p = 0; p < P; ++p)
+                        std::copy_n(qkv.data() + (std::size_t(t) * P + std::size_t(p)) * std::size_t(3 * D) + std::size_t(part * D + hh * dh),
                                     dh, dst + std::size_t(t) * E + std::size_t(p) * std::size_t(dh));
             }
             for (int t = 0; t < T; ++t) {
@@ -138,9 +158,9 @@ void attentionFeatures(const Tensor& h, const cnn::Net& net, std::vector<float>&
                     const float* vs = vh.data() + std::size_t(s2) * E;
                     for (std::size_t i = 0; i < E; ++i) acc[i] += a * vs[i];
                 }
-                for (int p = 0; p < kP; ++p)
+                for (int p = 0; p < P; ++p)
                     std::copy_n(acc.data() + std::size_t(p) * std::size_t(dh), dh,
-                                o.data() + (std::size_t(t) * kP + std::size_t(p)) * std::size_t(D) + std::size_t(hh * dh));
+                                o.data() + (std::size_t(t) * P + std::size_t(p)) * std::size_t(D) + std::size_t(hh * dh));
             }
         }
         linear(o.data(), rows, D, net.projw[l], net.projb[l], D, tmp.data());
@@ -158,24 +178,24 @@ void attentionFeatures(const Tensor& h, const cnn::Net& net, std::vector<float>&
         float acc = net.poolb[0];
         for (int j = 0; j < D; ++j) {
             float m = 0.f;
-            for (int p = 0; p < kP; ++p) m += hs[(std::size_t(t) * kP + std::size_t(p)) * std::size_t(D) + std::size_t(j)];
-            acc += net.poolw[j] * m / float(kP);
+            for (int p = 0; p < P; ++p) m += hs[(std::size_t(t) * P + std::size_t(p)) * std::size_t(D) + std::size_t(j)];
+            acc += net.poolw[j] * m / float(P);
         }
         w[std::size_t(t)] = acc; mx = std::max(mx, acc);
     }
     double z = 0;
     for (float& v : w) { v = std::exp(v - mx); z += v; }
     for (float& v : w) v = float(v / z);
-    linear(hs.data(), rows, D, net.outw, net.outb, C, x.data());      // (T, 36, ch)
+    linear(hs.data(), rows, D, net.outw, net.outb, C, x.data());      // (T, P, ch)
     for (int c = 0; c < C; ++c) {
-        for (int p = 0; p < kP; ++p) {
+        for (int p = 0; p < P; ++p) {
             float sum = 0.f, m = -1e30f;
             for (int t = 0; t < T; ++t) {
-                const float v = x[(std::size_t(t) * kP + std::size_t(p)) * std::size_t(C) + std::size_t(c)];
+                const float v = x[(std::size_t(t) * P + std::size_t(p)) * std::size_t(C) + std::size_t(c)];
                 sum += w[std::size_t(t)] * v; m = std::max(m, v);
             }
-            f[std::size_t(c) * kP + std::size_t(p)] = sum;
-            f[std::size_t(C + c) * kP + std::size_t(p)] = m;
+            f[std::size_t(c) * P + std::size_t(p)] = sum;
+            f[std::size_t(C + c) * P + std::size_t(p)] = m;
         }
     }
 }
@@ -243,7 +263,7 @@ std::array<float, 24> windowLogProbs(const float* x, const cnn::Net& net) {
     return logits;
 }
 
-// Media de log-probabilidades de una red sobre ventanas con paso crop/2.
+// Media de log-probabilidades de una red sobre ventanas con paso crop/2, ponderada por la posición.
 std::array<float, 24> netLogProbs(const std::vector<FrameChroma>& frames, const cnn::Net& net) {
     const std::size_t T = std::size_t(net.crop), C = std::size_t(net.inCh);
     // entrada (n, inCh, 36) con raíz cuadrada x 3; si hay menos de T fotogramas, se repite
@@ -260,10 +280,11 @@ std::array<float, 24> netLogProbs(const std::vector<FrameChroma>& frames, const 
     for (std::size_t s = 0; s + T <= n; s += T / 2) starts.push_back(s);
     if (starts.empty()) starts.push_back(0);
 
+    const auto w = positionWeights(starts, T, n0);
     std::array<float, 24> out{};
-    for (std::size_t s : starts) {
-        const auto lp = windowLogProbs(x.data() + s * C * kP, net);
-        for (std::size_t i = 0; i < 24; ++i) out[i] += lp[i] / float(starts.size());
+    for (std::size_t k = 0; k < starts.size(); ++k) {
+        const auto lp = windowLogProbs(x.data() + starts[k] * C * kP, net);
+        for (std::size_t i = 0; i < 24; ++i) out[i] += w[k] * lp[i];
     }
     return out;
 }
@@ -287,7 +308,8 @@ std::array<float, 24> specWindowLogProbs(const float* x, const cnn::SpecNet& net
     // media y máximo en el tiempo (2ch x 72), luego media y máximo entre octavas (4ch x 12)
     const int C2 = 2 * net.ch, C4 = 4 * net.ch;
     std::vector<float> f(std::size_t(C2) * kSemi), g(std::size_t(C4) * 12);
-    for (int c = 0; c < net.ch; ++c) {
+    if (net.attn > 0) attentionFeatures(h, net, f);    // KeyNetSpecAttn
+    else for (int c = 0; c < net.ch; ++c) {
         for (int s = 0; s < kSemi; ++s) {
             float sum = 0.f, mx = h.at(c, 0, s);
             for (int t = 0; t < T; ++t) { const float v = h.at(c, t, s); sum += v; mx = std::max(mx, v); }
@@ -339,10 +361,11 @@ std::array<float, 24> specNetLogProbs(const std::vector<FrameChroma>& frames, co
     for (std::size_t s = 0; s + T <= n; s += T / 2) starts.push_back(s);
     if (starts.empty()) starts.push_back(0);
 
+    const auto w = positionWeights(starts, T, n0);
     std::array<float, 24> out{};
-    for (std::size_t s : starts) {
-        const auto lp = specWindowLogProbs(x.data() + s * kSpecBins, net);
-        for (std::size_t i = 0; i < 24; ++i) out[i] += lp[i] / float(starts.size());
+    for (std::size_t k = 0; k < starts.size(); ++k) {
+        const auto lp = specWindowLogProbs(x.data() + starts[k] * kSpecBins, net);
+        for (std::size_t i = 0; i < 24; ++i) out[i] += w[k] * lp[i];
     }
     return out;
 }

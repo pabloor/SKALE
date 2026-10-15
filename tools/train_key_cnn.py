@@ -84,6 +84,15 @@ class KeyNetAttn(KeyNet):
 
     def forward(self, x):                                  # x: (B, in_ch, T, 36)
         x = self._conv(x, self.c1, self.bn1); x = self._conv(x, self.c2, self.bn2); x = self._conv(x, self.c3, self.bn3)
+        f = self.attend(x)                                 # (B, 2ch, 36)
+        B = x.shape[0]
+        r = f[:, :, self.rot].permute(0, 2, 1, 3).reshape(B, 36, -1)
+        s = self.head(r)
+        s = torch.stack([torch.logsumexp(torch.stack([s[:, (3 * t - 1) % 36], s[:, 3 * t], s[:, (3 * t + 1) % 36]], 0), 0)
+                         for t in range(12)], dim=1)
+        return s.reshape(B, 24)
+
+    def attend(self, x):                                   # (B, ch, T, P) -> (B, 2ch, P)
         B, C, T, P = x.shape; H = self.heads; dh = self.d // H
         h = self.inp(x.permute(0, 2, 3, 1))                # (B, T, 36, d)
         for qkv, proj, ff in zip(self.qkv, self.proj, self.ff):
@@ -94,13 +103,8 @@ class KeyNetAttn(KeyNet):
             h = h + self.adrop(proj(o))
             h = h + self.adrop(ff(self._norm(h)))
         w = torch.softmax(self.pool(h.mean(2)).squeeze(-1), dim=1)          # (B, T): peso de cada fotograma
-        y = self.out(h).permute(0, 3, 1, 2)                # (B, ch, T, 36)
-        f = torch.cat([(y * w[:, None, :, None]).sum(2), y.amax(2)], dim=1)  # (B, 2ch, 36)
-        r = f[:, :, self.rot].permute(0, 2, 1, 3).reshape(B, 36, -1)
-        s = self.head(r)
-        s = torch.stack([torch.logsumexp(torch.stack([s[:, (3 * t - 1) % 36], s[:, 3 * t], s[:, (3 * t + 1) % 36]], 0), 0)
-                         for t in range(12)], dim=1)
-        return s.reshape(B, 24)
+        y = self.out(h).permute(0, 3, 1, 2)                # (B, ch, T, P)
+        return torch.cat([(y * w[:, None, :, None]).sum(2), y.amax(2)], dim=1)
 
 
 class KeyNetSpec(nn.Module):
@@ -131,6 +135,30 @@ class KeyNetSpec(nn.Module):
         f = torch.roll(f, 9, dims=2)                         # índice n = nota n (0 = Do)
         r = f[:, :, self.rot].permute(0, 2, 1, 3).reshape(f.shape[0], 12, -1)
         return self.head(r).reshape(f.shape[0], 24)          # (tónica, modo) -> tónica*2 + modo
+
+
+class KeyNetSpecAttn(KeyNetSpec):
+    """KeyNetSpec con la atención entre fotogramas de KeyNetAttn sobre los 72 semitonos (la puntuación suma sobre todos,
+    así que transponer apenas la cambia: solo los bordes del espectro) y agrupación con pesos por fotograma."""
+    def __init__(self, ch=16, hidden=64, drop=0.2, attn=2, d=32, heads=4):
+        super().__init__(ch=ch, hidden=hidden, drop=drop)
+        a = KeyNetAttn(ch=ch, hidden=hidden, drop=drop, in_ch=1, attn=attn, d=d, heads=heads)
+        self.d, self.heads = d, heads
+        self.inp, self.qkv, self.proj, self.ff, self.pool, self.out, self.adrop = a.inp, a.qkv, a.proj, a.ff, a.pool, a.out, a.adrop
+
+    _norm = staticmethod(KeyNetAttn._norm)
+    attend = KeyNetAttn.attend
+
+    def forward(self, x):                                    # x: (B, 1, T, 216)
+        x = self._conv(x, self.c1, self.bn1, 4)
+        x = F.max_pool2d(x, (1, 3))
+        x = self._conv(x, self.c2, self.bn2, 2); x = self._conv(x, self.c3, self.bn3, 2)
+        f = self.attend(x)                                   # (B, 2ch, 72)
+        f = f.reshape(f.shape[0], f.shape[1], 6, 12)
+        f = torch.cat([f.mean(2), f.amax(2)], dim=1)
+        f = torch.roll(f, 9, dims=2)
+        r = f[:, :, self.rot].permute(0, 2, 1, 3).reshape(f.shape[0], 12, -1)
+        return self.head(r).reshape(f.shape[0], 24)
 
 
 class KeyNetBoth(nn.Module):
@@ -244,6 +272,17 @@ def random_mask(xs, rng, spec):
     return xs
 
 
+def notes_loss(logits, ys):
+    """Pérdida sobre los 12 conjuntos de notas: una tonalidad y su relativa (C mayor y A menor) son el mismo conjunto,
+    así que se suman sus probabilidades. Penaliza confundir las notas (quinta, paralela...) y no la relativa."""
+    t = torch.arange(12, device=logits.device)
+    lp = F.log_softmax(logits, 1)
+    sets = torch.logsumexp(torch.stack([lp[:, 2 * t], lp[:, 2 * ((t + 9) % 12) + 1]], 0), 0)      # (B, 12): mayor t
+    tonic, minor = ys // 2, ys % 2
+    target = torch.where(minor == 1, (tonic + 3) % 12, tonic)
+    return F.nll_loss(sets, target)
+
+
 def soft_targets(ys, s):
     """(1 - s) en la tonalidad y s repartido: quintas arriba y abajo (mismo modo) 0,3 cada una, relativa 0,25,
     paralela 0,15. ys: índices tónica*2 + modo."""
@@ -324,6 +363,7 @@ def main():
     ap.add_argument('--mask', type=float, default=0.0, help='probabilidad de enmascarar franjas de tiempo y frecuencia (SpecAugment) por lote')
     ap.add_argument('--soft', type=float, default=0.0, help='etiquetas blandas: masa para la quinta, la relativa y la paralela (p. ej. 0.15)')
     ap.add_argument('--tctx', type=int, default=0, help='capas de contexto temporal (convoluciones dilatadas 2, 4, 8...) en las redes de cromagrama')
+    ap.add_argument('--notes', type=float, default=0.0, help='peso de la pérdida por conjunto de notas (tonalidad o su relativa)')
     ap.add_argument('--attn', type=int, default=0, help='capas de atención entre fotogramas en la red de cromagrama (KeyNetAttn)')
     ap.add_argument('--aux', default='', help='carpeta de tools/slakh_notes.py: tarea auxiliar de notas y bajo por fotograma')
     ap.add_argument('--aux-weight', type=float, default=0.5); ap.add_argument('--aux-batch', type=int, default=32)
@@ -365,6 +405,7 @@ def main():
     print(f'entrenamiento {len(tr)}  prueba {len(ts)}', flush=True)
     cfg = dict(ch=a.ch, hidden=a.hidden, drop=a.drop, in_ch=in_ch, layers=a.layers, crop=a.crop)
     if a.both: model = KeyNetBoth(ch=a.ch, hidden=a.hidden, drop=a.drop, in_ch=in_ch)
+    elif a.spec and a.attn: model = KeyNetSpecAttn(ch=a.ch, hidden=a.hidden, drop=a.drop, attn=a.attn)
     elif a.spec: model = KeyNetSpec(ch=a.ch, hidden=a.hidden, drop=a.drop)
     elif a.attn: model = KeyNetAttn(ch=a.ch, hidden=a.hidden, drop=a.drop, in_ch=in_ch, attn=a.attn)
     else: model = KeyNet(ch=a.ch, hidden=a.hidden, drop=a.drop, in_ch=in_ch, layers=a.layers, tctx=a.tctx, aux=bool(a.aux))
@@ -419,7 +460,9 @@ def main():
                 tgt = 0.95 * soft_targets(ys, a.soft) + 0.05 / 24
                 loss = -(tgt.to(dev) * F.log_softmax(model(xs.to(dev)), 1)).sum(1).mean()
             else:
-                loss = F.cross_entropy(model(xs.to(dev)), torch.from_numpy(ys).long().to(dev), label_smoothing=0.05)
+                out = model(xs.to(dev)); yt = torch.from_numpy(ys).long().to(dev)
+                loss = F.cross_entropy(out, yt, label_smoothing=0.05)
+                if a.notes: loss = loss + a.notes * notes_loss(out, yt)
             if aux:   # notas y bajo: mismos aumentos (desafinación, transposición con las notas, ecualización)
                 xa, za = [], []
                 for j in rng.choice(len(aux), a.aux_batch):

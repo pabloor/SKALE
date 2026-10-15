@@ -99,6 +99,7 @@ Cuando una combinación sea mejor, se reentrenan esas mismas configuraciones con
 
 ```sh
 python tools/export_key_cnn.py models/final_c2_full.pt models/final_c4_full.pt models/final_c4_long_full.pt \
+    models/final_a4_b_full.pt models/final_a4_long_b_full.pt models/final_spec_attn_full.pt models/final_spec_w24_attn_full.pt \
     models/final_a4_full.pt models/final_a4_long_full.pt models/final_spec_full.pt models/final_spec_w24_full.pt \
     --spec-weight 0.5   # el modelo actual
 cmake --build build -j && ./build/skale_tests

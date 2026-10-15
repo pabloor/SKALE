@@ -10,13 +10,13 @@ GuitarSet 72, GiantSteps+ 51, resto pequeños). Métrica principal: acierto exac
 variada) y en el total; también MIREX (`tools/eval_key_cnn.py`).
 
 ## Cómo analiza ahora (por defecto, `--model ensemble`)
-Log-probabilidades de 24 tonalidades = 0,5 × media de 5 redes de cromagrama entrenadas con ecualización
-aleatoria (`--eq 0.5`; 3 convolucionales y 2 con atención entre fotogramas, `--attn 2`) + 0,5 × media de 2 redes de espectro, todas entrenadas también con las canciones
-completas de FMAK (`--max-frames 1280`) (`src/analysis/KeyCnn.cpp`, pesos en
-`KeyCnnWeights.h`). Con audio de 60 s o más se mezcla 0,85 × redes + 0,15 × lineal (`KeyModelWeights.h`,
-que usa el acorde final); con menos, solo las redes (`cnnWeight`, `cnnWeightLong`, `longSeconds` en
-`src/analysis/Analyzer.h`; `--cnn-weight` en la CLI fija ambos). Si la 2ª tonalidad tiene ≥ 0,5 veces la
-probabilidad de la 1ª, el resultado es «dudoso» y se destacan las dos (`doubtRatio`, `--doubt`); si no, la 2ª se muestra en pequeño (con ella siempre: 82,4 % FMA completas, 85,1 % GTZAN). Las redes son equivariantes a la
+Log-probabilidades de 24 tonalidades = 0,5 × media de 7 redes de cromagrama (3 convolucionales y 4 con atención
+entre fotogramas, `--attn 2`) + 0,5 × media de 4 redes de espectro (2 convolucionales y 2 con atención), todas con
+ecualización aleatoria en las de cromagrama (`--eq 0.5`) y entrenadas también con las canciones completas de FMAK
+(`--max-frames 1280`) (`src/analysis/KeyCnn.cpp`, pesos en `KeyCnnWeights.h`). Dentro de cada red, las ventanas se
+promedian con peso exp(−1 · posición relativa en la canción) (`kPositionDecay`): el principio acierta más. Solo redes
+para cualquier duración (`cnnWeight = cnnWeightLong = 1`; con 9 redes el 15 % de lineal ya restaba). Si la 2ª
+tonalidad tiene ≥ 0,5 veces la probabilidad de la 1ª, el resultado es «dudoso» (`doubtRatio`, `--doubt`). Las redes son equivariantes a la
 transposición. Entrada por fotograma (~0,19 s): cromagrama fino de 36 bins/octava de 4 bandas (cromagrama,
 bajo, medios, agudos) y espectro logarítmico de 216 bins.
 
@@ -86,12 +86,18 @@ las demás con `tools/eval_key_cnn.py` (C++ y PyTorch dan lo mismo). La mejora d
 (+1,7 FMA) y la de la ecualización de las redes de cromagrama (+1,0 FMA frente a las mismas redes sin
 ecualizar) se confirmaron con dos juegos de semillas. Con la ecualización el lineal resta y se quitó.
 
-## Redes con atención (lo último que ha funcionado)
+## Redes con atención
 `KeyNetAttn` (`--attn 2`): convoluciones de KeyNet + 2 capas de atención entre fotogramas (equivariante; la
 puntuación suma sobre las 36 posiciones) + agrupación con pesos por fotograma. Añadir 2 (ventanas ~24 y ~48 s)
 a las 5 redes: FMA 63,6 → 64,1 / 63,9, FMA completas 69,8 → 70,0, GTZAN 69,5 → 70,5 / 70,8 (semillas A / B;
 `~/skale-runs/attn`). Con las 4: 63,9 / 70,2 / 71,1 (no compensa el coste). C++ = PyTorch; ≈ 1,7× más CPU.
-El modo en directo (cifras de arriba) se midió con las 5 redes anteriores.
+Añadir otras 2 con semillas 11/13 (9 redes) y 2 de espectro con atención (`KeyNetSpecAttn`, 72 semitonos; 11 redes):
++0,3–0,6 en FMA con dos semillas, GTZAN igual. Con prisa no compensan; el plugin prima la exactitud.
+Probado en octubre de 2026 sin mejora: pérdida por conjunto de notas (`--notes`, tonalidad o relativa), combinación
+aprendida de ventanas (pesar redes o confianza; solo ayuda la posición, que se dejó fija y moderada porque con más
+peso imita cómo anotó FMAK una sola persona: el acierto por décimo de canción cae de 74 a 58 %). FMAKv2 (la que se
+usa) corrige 218 etiquetas de v1, casi todas un semitono abajo; el modelo da la razón a v2 en 39 de 41. GiantSteps
+MTG Key = nuestro Beatport. Looperman prohíbe entrenar con su contenido; YouTube prohíbe descargar.
 
 ## Siguiente paso
 Todas las ideas probadas (ver abajo). Con los datos abiertos disponibles el modelo está en su límite; lo único
@@ -99,12 +105,13 @@ con margen es más música real etiquetada a mano: la página `tools/etiquetar.p
 FMA en `~/skale-datos/fma_user`) si alguien con buen oído puede etiquetar.
 
 ## Modelos entrenados (`models/`, formato {'state','cfg'})
-- **Producción:** `final_c2_full.pt`, `final_c4_full.pt`, `final_c4_long_full.pt`, `final_a4_full.pt`,
-  `final_a4_long_full.pt` (atención; `--channels 4 --eq 0.5 --attn 2`, semilla 1, y `--crop 256`, semilla 3),
-  `final_spec_full.pt`, `final_spec_w24_full.pt` (todos los datos más las canciones completas de FMAK; `--all
-  --eval-only gtzan --max-frames 1280`). Exportar: `tools/export_key_cnn.py models/final_c2_full.pt
-  models/final_c4_full.pt models/final_c4_long_full.pt models/final_a4_full.pt models/final_a4_long_full.pt
-  models/final_spec_full.pt models/final_spec_w24_full.pt --spec-weight 0.5`.
+- **Producción (11 redes):** `final_c2_full.pt`, `final_c4_full.pt`, `final_c4_long_full.pt`; atención de cromagrama
+  `final_a4_full.pt`, `final_a4_long_full.pt`, `final_a4_b_full.pt`, `final_a4_long_b_full.pt` (`--channels 4 --eq 0.5
+  --attn 2`, semillas 1, 3 (`--crop 256`), 11 y 13 (`--crop 256`)); espectro `final_spec_full.pt`,
+  `final_spec_w24_full.pt` y con atención `final_spec_attn_full.pt`, `final_spec_w24_attn_full.pt` (`--spec ... --attn
+  2`, semilla 0, y `--ch 24`, semilla 2). Todas con `--all --eval-only gtzan --max-frames 1280` (12.988 pistas: todo
+  menos GTZAN, incluidas las canciones completas de prueba). Exportar: `tools/export_key_cnn.py` con las 11 en ese
+  orden y `--spec-weight 0.5`.
   Sus versiones sin la partición de prueba: `split_*_full.pt`.
 - `final_c2.pt`, `final_c4.pt`, `final_c4_long.pt`: las 3 redes de cromagrama anteriores, sin ecualización.
 - Anteriores (sin canciones completas): `final_c2_eq.pt`, `final_c4_eq.pt`, `final_c4_long_eq.pt` (ecualización

@@ -40,13 +40,17 @@ def main():
     def report(name, lp):
         p = lp.argmax(1)
         cols = ' '.join(f'{k}={100 * (p[g == k] == y[g == k]).mean():.1f}' for k in GROUPS if (g == k).any())
-        print(f'{name:28} {cols}  todo={100 * (p == y).mean():.1f}  MIREX={mirex(p, y):.3f}', flush=True)
+        rel = np.where(p % 2 == 0, ((p // 2 + 9) % 12) * 2 + 1, ((p // 2 + 3) % 12) * 2)
+        ok = (p == y) | (rel == y)   # notas correctas: la tonalidad o su relativa
+        notes = ' '.join(f'{k}={100 * ok[g == k].mean():.1f}' for k in ('fma', 'gtzan', 'fma_full_test') if (g == k).any())
+        print(f'{name:28} {cols}  todo={100 * (p == y).mean():.1f}  MIREX={mirex(p, y):.3f}  | notas: {notes}', flush=True)
 
     chroma, specs = [], []
     for path in a.models:
         ck = torch.load(path, map_location='cpu'); c = ck['cfg']
         if c.get('spec'):
-            m = tkc.KeyNetSpec(ch=c['ch'], hidden=c['hidden']); load = lambda r: np.fromfile(os.path.join(a.spec, r['file']), dtype=np.float32).reshape(-1, 1, 216) * 3.0
+            m = tkc.KeyNetSpecAttn(ch=c['ch'], hidden=c['hidden'], attn=c['attn']) if c.get('attn') else tkc.KeyNetSpec(ch=c['ch'], hidden=c['hidden'])
+            load = lambda r: np.fromfile(os.path.join(a.spec, r['file']), dtype=np.float32).reshape(-1, 1, 216) * 3.0
         else:
             ic = c.get('in_ch', 2)
             m = (tkc.KeyNetAttn(ch=c['ch'], hidden=c['hidden'], in_ch=ic, attn=c['attn']) if c.get('attn') else

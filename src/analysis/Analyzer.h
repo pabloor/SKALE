@@ -23,11 +23,11 @@ struct AnalysisOptions {
     bool keepFrames = false;     // guarda la serie de cromagramas finos (para entrenar redes)
     double windowSeconds = 8;    // ventanas del voto por ventanas (paso = la mitad)
     bool cnn = true;             // combina la red convolucional con el modelo aprendido (cnnWeight); si learnedModel es false solo la red
-    // Peso de las redes frente al modelo lineal (1 = solo las redes). El lineal mira el acorde final: ayuda en
-    // piezas completas (203 piezas fuera del entrenamiento: 82,8 -> 85,7 %) y resta en fragmentos de 30 s
-    // (FMA: 63,4 -> 62,3 %), así que depende de la duración.
+    // Peso de las redes frente al modelo lineal (1 = solo las redes). El lineal mira el acorde final; con 5 redes
+    // ayudaba en piezas completas de clásica (82,8 -> 85,7 %), pero con las 9 actuales resta en canciones completas de
+    // FMA (70,2 -> 69,3 % con 0,15; notas 77,7 -> 77,0), así que por defecto no se usa.
     double cnnWeight = 1.0;          // audio de menos de longSeconds
-    double cnnWeightLong = 0.85;     // audio de longSeconds o más
+    double cnnWeightLong = 1.0;      // audio de longSeconds o más
     double longSeconds = 60;
     bool learnedModel = true;    // modelo de tonalidad aprendido (ignora perfil y pesos de bajo/final); false = clásico
     double bassWeight = 1;       // peso del bajo (tónica y quinta) en la tonalidad; 0 = off
