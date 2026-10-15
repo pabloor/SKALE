@@ -4,3 +4,4 @@ build-plugin/
 __pycache__/
 *.pyc
 .venv/
+dist/

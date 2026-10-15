@@ -4,9 +4,14 @@
 
 #include "PluginProcessor.h"
 
-// Vista en directo (tonalidad, confianza, escala, acorde) y, al arrastrar o
-// abrir un archivo, resultado del análisis completo de ese archivo.
+// Una sola pantalla: la escala de la canción entera (y su relativa, si está en duda), su fiabilidad y un aviso si otra
+// escala con notas distintas es casi igual de probable.
+// Textos en inglés (como Auto-Tune y Melodyne). Con ARA el análisis empieza solo; sin ARA, «Analyze song» escucha la
+// canción mientras suena; en cualquier caso se puede soltar o abrir un archivo.
 class SkaleEditor : public juce::AudioProcessorEditor,
+#if JucePlugin_Enable_ARA
+                    public juce::AudioProcessorEditorARAExtension,
+#endif
                     public juce::FileDragAndDropTarget,
                     private juce::Timer {
 public:
@@ -26,16 +31,15 @@ public:
 
 private:
     void timerCallback() override { refresh(); }
-    void paintLive(juce::Graphics&, juce::Rectangle<int> area);
-    void paintFile(juce::Graphics&, juce::Rectangle<int> area);
+    void paintResult(juce::Graphics&, juce::Rectangle<int> area);
+    void paintMessage(juce::Graphics&, juce::Rectangle<int> area, const juce::String& title, const juce::String& body);
     void chooseFile();
 
     SkaleProcessor& processor_;
-    skale::TrackerSnapshot snap_;
-    FileAnalysisState file_;
+    SongState state_;
     bool dragOver_ = false;
-    juce::TextButton resetButton_{"Reiniciar"};
-    juce::TextButton openButton_{"Abrir archivo..."};
-    juce::TextButton backButton_{"Volver al directo"};
+    juce::TextButton analyzeButton_{"Analyze song"};
+    juce::TextButton finishButton_{"Finish now"};
+    juce::TextButton openButton_{"Open file..."};
     std::unique_ptr<juce::FileChooser> chooser_;
 };

@@ -20,7 +20,16 @@ probabilidad de la 1ª, el resultado es «dudoso» y se destacan las dos (`doubt
 transposición. Entrada por fotograma (~0,19 s): cromagrama fino de 36 bins/octava de 4 bandas (cromagrama,
 bajo, medios, agudos) y espectro logarítmico de 216 bins.
 
-## Modo en directo (plugin, `KeyTracker`)
+## Plugin (octubre de 2026): solo la escala de la canción entera
+Para gente sin formación musical que quiere ajustar Auto-Tune/Melodyne en una voz: se inserta en la pista de la base
+y da UNA escala para toda la canción, con la máxima fiabilidad (puede tardar). Con ARA (Logic) lee las regiones
+enteras sin reproducir; sin ARA, «Analyze song» escucha la canción y analiza al parar; o se arrastra un archivo.
+Muestra la escala y su relativa si está en duda (≥ 0,3 × p1; mismas notas), la fiabilidad (p de las 7 notas = p1 +
+p relativa: High ≥ 0,75 ~92 %, Medium ~74 %, Low < 0,5 ~52 %) y un aviso si otra escala con notas distintas tiene
+≥ 0,5 × p1 (notas correctas entre las mostradas: FMA completas 83 %, GTZAN 82 %). Nada en directo, sin acorde
+actual, sin tabla de afinadores; textos en inglés. El usuario lo prueba en Logic.
+
+## Modo en directo (`KeyTracker`; el plugin ya no lo usa)
 Redes cada 3 s sobre los últimos 30 s; hasta llenar la ventana, la última respuesta sola; después, media con
 memoria de vida media 120 s (acumulada desde el principio). La 2ª tonalidad se da siempre («también posible»,
 en pequeño) y se destaca si es dudosa. Medir: `skale-cli audio --live-eval [--live-every 3]` (scripts en

@@ -7,26 +7,32 @@
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "analysis/Analyzer.h"
-#include "analysis/KeyTracker.h"
 
-struct FileAnalysisState {
-    enum class Status { Idle, Working, Done, Error };
+// Escala de una canción entera, para ajustar Auto-Tune, Melodyne, etc. Tres formas de darle la canción:
+//  - ARA (Logic, Studio One, Cubase, Reaper...): lee el audio completo de las regiones de la pista, sin reproducir.
+//  - Sin ARA: «Analizar canción» captura el audio mientras suena y, al parar la reproducción, analiza todo.
+//  - Arrastrar o abrir un archivo de audio.
+// El resultado es uno solo para toda la canción (el mismo análisis que skale-cli) y no cambia mientras suena.
+struct SongState {
+    enum class Status { Idle, Listening, Working, Done, Error };
     Status status = Status::Idle;
-    juce::String fileName;
+    juce::String source;            // de dónde sale: archivo, región(es) de la pista, audio escuchado
     juce::String error;
+    double listenedSeconds = 0;     // mientras se escucha
     skale::SongAnalysis result;
 };
 
-// El hilo de audio solo copia muestras (mono) a un buffer circular sin bloqueos.
-// Un hilo de análisis lee ese buffer, hace las FFT con KeyTracker y publica una
-// instantánea que el editor consulta.
-class SkaleProcessor : public juce::AudioProcessor, private juce::Thread {
+class SkaleProcessor : public juce::AudioProcessor,
+#if JucePlugin_Enable_ARA
+                       public juce::AudioProcessorARAExtension,
+#endif
+                       private juce::Timer {
 public:
     SkaleProcessor();
     ~SkaleProcessor() override;
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
-    void releaseResources() override {}
+    void releaseResources() override;
     bool isBusesLayoutSupported(const BusesLayout& layouts) const override;
     void processBlock(juce::AudioBuffer<float>&, juce::MidiBuffer&) override;
 
@@ -36,7 +42,7 @@ public:
     const juce::String getName() const override { return "Skale"; }
     bool acceptsMidi() const override { return false; }
     bool producesMidi() const override { return false; }
-    double getTailLengthSeconds() const override { return 0; }
+    double getTailLengthSeconds() const override;
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
     void setCurrentProgram(int) override {}
@@ -45,31 +51,43 @@ public:
     void getStateInformation(juce::MemoryBlock&) override {}
     void setStateInformation(const void*, int) override {}
 
-    skale::TrackerSnapshot latest() const;
-    void resetAnalysis() { resetRequested_.store(true); }
+    SongState state() const;
+    bool usesARA() const;
 
-    // Análisis completo de un archivo de audio (en un hilo aparte).
     void analyzeFile(const juce::File& file);
-    FileAnalysisState fileState() const;
-    void clearFileAnalysis();
+    // Sin ARA: empieza a escuchar (hasta kMaxListenSeconds); termina sola al parar la reproducción o con stopListening().
+    void startListening();
+    void stopListening();
+    void clear();
+
+    // Análisis de audio mono ya leído (en el hilo de análisis). Lo usan los tres caminos.
+    void analyzeSamples(std::vector<float> mono, double sampleRate, const juce::String& source);
+
+    static constexpr double kMaxListenSeconds = 600;
 
 private:
-    void run() override;
+    void timerCallback() override;
+#if JucePlugin_Enable_ARA
+    void analyzeRegionsIfChanged();
+    juce::String regionsSignature_;
+#endif
 
-    static constexpr int kFifoSize = 1 << 18;   // ~6 s a 44,1 kHz; el hilo de análisis va muy por delante
-    juce::AbstractFifo fifo_{kFifoSize};
-    std::vector<float> fifoData_;
-
+    // Captura (sin ARA): el hilo de audio solo escribe en un vector ya reservado.
+    std::vector<float> capture_;
+    juce::SpinLock captureLock_;               // el hilo de audio solo lo intenta; si no lo consigue, no escribe
+    std::atomic<std::size_t> captured_{0};
+    std::atomic<bool> capturing_{false};
+    std::atomic<bool> heardPlayback_{false};   // el anfitrión ha reproducido desde que se pulsó «Analizar»
+    std::atomic<bool> playbackStopped_{false};
     std::atomic<double> sampleRate_{44100.0};
-    std::atomic<bool> rateChanged_{true};
-    std::atomic<bool> resetRequested_{false};
 
-    mutable std::mutex snapMutex_;
-    skale::TrackerSnapshot snapshot_;
-
-    mutable std::mutex fileMutex_;
-    FileAnalysisState fileState_;
-    std::atomic<int> fileJobId_{0};     // un archivo nuevo invalida el análisis anterior
-    juce::ThreadPool filePool_{1};
-    friend class FileAnalysisJob;
+    mutable std::mutex stateMutex_;
+    SongState state_;
+    std::atomic<int> jobId_{0};                // un análisis nuevo invalida el anterior
+    juce::ThreadPool pool_{1};
+    friend class SongAnalysisJob;
 };
+
+#if JucePlugin_Enable_ARA
+const ARA::ARAFactory* JUCE_CALLTYPE createARAFactory();
+#endif

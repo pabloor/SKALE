@@ -57,6 +57,15 @@ if(SKALE_BUILD_PLUGIN)
     GIT_TAG 8.0.15
     GIT_SHALLOW TRUE)
   FetchContent_MakeAvailable(JUCE)
+  # SDK de ARA (Celemony, Apache 2.0): en Logic y otros DAW con ARA el plugin lee el audio entero de las regiones
+  # sin reproducirlas. Solo cabeceras y código que compila JUCE; no se construye nada del SDK.
+  FetchContent_Declare(ARA_SDK
+    GIT_REPOSITORY https://github.com/Celemony/ARA_SDK.git
+    GIT_TAG releases/2.3.0
+    GIT_SHALLOW TRUE
+    SOURCE_SUBDIR no-construir)
+  FetchContent_MakeAvailable(ARA_SDK)
+  juce_set_ara_sdk_path(${ara_sdk_SOURCE_DIR})
 
   set(SKALE_FORMATS VST3 Standalone)
   if(APPLE)
@@ -70,6 +79,7 @@ if(SKALE_BUILD_PLUGIN)
     PLUGIN_CODE Skal
     FORMATS ${SKALE_FORMATS}
     IS_SYNTH FALSE
+    IS_ARA_EFFECT TRUE
     NEEDS_MIDI_INPUT FALSE
     NEEDS_MIDI_OUTPUT FALSE
     COPY_PLUGIN_AFTER_BUILD FALSE)

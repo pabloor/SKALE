@@ -28,7 +28,31 @@ Solo hace falta un compilador C++17 y CMake. `third_party/dr_libs` (dr_wav, dr_m
 
 El AU (solo macOS; Logic Pro y GarageBand solo cargan AU) se instala copiando `build-plugin/SkalePlugin_artefacts/Release/AU/Skale.component` a `~/Library/Audio/Plug-Ins/Components/`. Pasa `auval -v aufx Skal Pabo` y pluginval 1.0.4 con exigencia 10 (AU y VST3; en el AU, un aviso de JUCE por no tener presets de fábrica).
 
-JUCE (8.0.15) se descarga al configurar; no está en el repo. En Linux hacen falta ALSA, FreeType, Fontconfig y las cabeceras de X11, GL y GTK/WebKit (`libasound2-dev libfreetype-dev libfontconfig1-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxext-dev libgl1-mesa-dev`). El audio pasa sin tocarse: el hilo de audio solo copia muestras a un buffer circular sin bloqueos; otro hilo ejecuta `KeyTracker` (`src/analysis/KeyTracker.*`, sin dependencias de JUCE) y publica tonalidad, confianza, escala y acorde actual 5 veces por segundo.
+JUCE (8.0.15) se descarga al configurar; no está en el repo. En Linux hacen falta ALSA, FreeType, Fontconfig y las cabeceras de X11, GL y GTK/WebKit (`libasound2-dev libfreetype-dev libfontconfig1-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxext-dev libgl1-mesa-dev`). El audio pasa sin tocarse; el análisis va siempre en un hilo aparte.
+
+**Qué hace:** dice la escala de la canción entera de la pista donde está insertado (pensado para la base o el instrumental), para ajustar después Auto-Tune, Melodyne u otro afinador en la voz. Una sola respuesta, que no cambia mientras suena, con el mismo análisis que `skale-cli` sobre el audio completo (las redes y, desde 60 s, el 15 % del modelo lineal). Textos en inglés, como los afinadores.
+
+- **Con ARA** (Logic Pro, Studio One, Cubase, Reaper...): lee el audio entero de las regiones de la pista sin reproducirlas y lo analiza en segundo plano; si las regiones cambian, vuelve a analizar. El plugin reproduce esas regiones sin tocarlas. SDK de ARA 2.3.0 (Celemony, Apache 2.0), que se descarga al configurar.
+- **Sin ARA:** «Analyze song» escucha la canción mientras se reproduce (hasta 10 min) y, al parar, la analiza entera. En la aplicación independiente se termina con «Finish now».
+- **Archivo:** arrastra un wav, aiff, flac, ogg o mp3 a la ventana o pulsa «Open file...».
+
+Muestra:
+- la escala y sus 7 notas; si la relativa (mismas notas) tiene al menos el 30 % de la probabilidad de la 1ª, también («A minor / C major (same notes)»);
+- la **fiabilidad**, según la probabilidad de esas 7 notas (la escala más su relativa), calibrada con canciones completas de FMA y GTZAN: High (≥ 0,75; ~92 % de notas correctas, ~40 % de las canciones), Medium (0,5–0,75; ~74 %) y Low (< 0,5; ~52 %);
+- un **aviso** si otra escala con notas distintas tiene al menos la mitad de probabilidad, con las notas que cambian («changes F# -> F»). Sale en ~1 de cada 5 canciones y las notas correctas están entre las mostradas el 83 % de las veces en FMA (82 % en GTZAN), frente al 78 / 74 % de la escala sola.
+
+![Vista del plugin](docs/plugin.png)
+
+
+Prueba sin anfitrión ni tarjeta de sonido (como «Analyze song»: pasa el audio por `processBlock` en bloques de 512, termina la escucha y guarda una captura del resultado): `SkalePluginSelfTest audio.wav captura.png`; con `--file`, como al arrastrar el archivo (se construye con `--target SkalePluginSelfTest`). En los cuatro preludios probados el plugin da la misma tonalidad que el analizador de archivos sobre esos mismos 60 s.
+
+**Licencia de JUCE:** JUCE se ofrece bajo AGPLv3 o con licencia comercial. Skale es propietario, así que **para distribuir el plugin hace falta la licencia comercial de JUCE** (compilarlo para uso propio no lo requiere). Alternativa sin JUCE: el SDK de VST3 (MIT) o CLAP, con una interfaz propia.
+
+Limitaciones: el resultado no se guarda con el proyecto (con ARA se vuelve a analizar al abrirlo). La lectura de regiones por ARA está validada con `auval` y pluginval, pero falta probarla dentro de Logic.
+
+### Modo en directo (`KeyTracker`; el plugin ya no lo usa)
+
+Sigue en el núcleo y se mide con `skale-cli --live-eval` / `--live-dump`.
 
 **Directo con redes:** cada 3 s (`TrackerOptions::netEverySeconds`) pasa las mismas redes que el análisis de archivos sobre los últimos 30 s de audio (con las 7 redes, ~28 % de un núcleo del M5 en un hilo aparte, nunca en el de audio; con las 5 anteriores, ~15 %). Mientras esa ventana no está llena se muestra la última respuesta sola (ya ha visto todo el audio); después, la media de todas las respuestas con memoria de vida media 120 s (`netHalfLifeSeconds`), para no perder la tonalidad principal en puentes. Hasta la primera respuesta de las redes (~3 s) se ve la del método clásico (perfil + bajo), marcada como «primera estimación». Medido con `skale-cli --live-eval` (bloques de 512 como el plugin) sobre 500 canciones completas de FMA de prueba y los 837 fragmentos de GTZAN (redes `split_*`; exacta / con la 2ª, que se muestra siempre). Con las 7 redes actuales y la histéresis, simulado con `--live-dump` sobre las mismas pistas:
 
@@ -45,18 +69,6 @@ Con las 5 redes anteriores y sin histéresis (medido en C++ con `--live-eval`): 
 Sin memoria (solo los últimos 30 s) se baja al 59 % a los 3 min; empezar la memoria con la ventana llena resta 3–5 puntos en FMA desde 60 s, y usarla también antes resta 3–4 en GTZAN a los 10–30 s.
 
 **Estabilidad:** la tonalidad mostrada solo cambia cuando la nueva la supera en 0,3 de log-probabilidad media (`netHysteresis`); mientras, la nueva aparece como segunda. Simulado con las respuestas volcadas (`skale-cli --live-dump`): con 0,4, los cambios por minuto bajan de 0,33 a 0,18 en FMA y de 1,26 a 0,64 en GTZAN con el mismo acierto (±1). Probado sin mejora: ventanas de 45 y 60 s (±1 punto, más CPU), pesar cada respuesta por su confianza (ruido) y memoria de 240 s (+0,6–0,9 a los 3 min, pero tarda el doble en seguir una modulación).
-
-![Vista del plugin](docs/plugin.png)
-
-**Archivos:** arrastra un wav, aiff, flac, ogg o mp3 sobre la ventana (o pulsa «Abrir archivo...») y se analiza entero en un hilo aparte con el mismo análisis que la CLI (final y bajo incluidos): tonalidad con confianza y alternativas, escala, acordes de la tonalidad y los acordes más usados (con * los ajenos a la tonalidad). «Volver al directo» regresa a la vista en tiempo real. Si el archivo no se puede leer o es silencio, lo dice. `SkalePluginSelfTest --file audio.mp3 captura.png` lo prueba sin interfaz gráfica.
-
-![Análisis de un archivo](docs/plugin_archivo.png)
-
-Prueba sin anfitrión ni tarjeta de sonido (pasa un wav por `processBlock` en bloques de 512 y guarda una captura): `SkalePluginSelfTest audio.wav captura.png` (se construye con `--target SkalePluginSelfTest`). En los cuatro preludios probados el plugin da la misma tonalidad que el analizador de archivos sobre esos mismos 60 s.
-
-**Licencia de JUCE:** JUCE se ofrece bajo AGPLv3 o con licencia comercial. Skale es propietario, así que **para distribuir el plugin hace falta la licencia comercial de JUCE** (compilarlo para uso propio no lo requiere). Alternativa sin JUCE: el SDK de VST3 (MIT) o CLAP, con una interfaz propia.
-
-Limitaciones: no hay estado guardado, ni ajuste de la memoria en la interfaz, y el bonus del acorde final no se aplica (en tiempo real no hay final). El plugin aún no se ha probado dentro de un DAW (solo `auval`, pluginval y la prueba sin interfaz).
 
 ## Línea de comandos
 
