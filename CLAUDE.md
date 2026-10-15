@@ -86,6 +86,10 @@ las demás con `tools/eval_key_cnn.py` (C++ y PyTorch dan lo mismo). La mejora d
 (+1,7 FMA) y la de la ecualización de las redes de cromagrama (+1,0 FMA frente a las mismas redes sin
 ecualizar) se confirmaron con dos juegos de semillas. Con la ecualización el lineal resta y se quitó.
 
+## Acierto actual (octubre de 2026, C++, redes `split`, configuración del plugin)
+Canciones completas de FMA de prueba (1.096): exacta 71,4 %, notas (escala o relativa) 78,8 %, notas correctas entre
+lo que muestra el plugin 84,4 %. GTZAN (837 fragmentos): 71,2 / 75,1 / 82,0 %. Medir: `~/skale-runs/exact/eval.py CLI auto`.
+
 ## Redes con atención
 `KeyNetAttn` (`--attn 2`): convoluciones de KeyNet + 2 capas de atención entre fotogramas (equivariante; la
 puntuación suma sobre las 36 posiciones) + agrupación con pesos por fotograma. Añadir 2 (ventanas ~24 y ~48 s)

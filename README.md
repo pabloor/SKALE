@@ -39,7 +39,7 @@ JUCE (8.0.15) se descarga al configurar; no está en el repo. En Linux hacen fal
 Muestra:
 - la escala y sus 7 notas; si la relativa (mismas notas) tiene al menos el 30 % de la probabilidad de la 1ª, también («A minor / C major (same notes)»);
 - la **fiabilidad**, según la probabilidad de esas 7 notas (la escala más su relativa), calibrada con canciones completas de FMA y GTZAN: High (≥ 0,75; ~92 % de notas correctas, ~40 % de las canciones), Medium (0,5–0,75; ~74 %) y Low (< 0,5; ~52 %);
-- un **aviso** si otra escala con notas distintas tiene al menos la mitad de probabilidad, con las notas que cambian («changes F# -> F»). Sale en ~1 de cada 5 canciones y las notas correctas están entre las mostradas el 83 % de las veces en FMA (82 % en GTZAN), frente al 78 / 74 % de la escala sola.
+- un **aviso** si otra escala con notas distintas tiene al menos la mitad de probabilidad, con las notas que cambian («changes F# -> F»). Sale en ~1 de cada 5 canciones. Con las 11 redes actuales (medido en C++ con las versiones `split`, que no han visto estas canciones): en 1.096 canciones completas de FMA la escala exacta acierta el **71,4 %**, las notas (escala o relativa) el **78,8 %** y las notas correctas están entre lo mostrado el **84,4 %**; en GTZAN (fragmentos de 30 s de música comercial), 71,2 / 75,1 / 82,0 %.
 
 ![Vista del plugin](docs/plugin.png)
 
