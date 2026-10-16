@@ -43,7 +43,7 @@ Interfaz mínima: la escala en grande, con su relativa al lado si está en duda 
 
 Prueba sin anfitrión ni tarjeta de sonido (como «Analyze song»: pasa el audio por `processBlock` en bloques de 512, termina la escucha y guarda una captura del resultado): `SkalePluginSelfTest audio.wav captura.png`; con `--file`, como al arrastrar el archivo (se construye con `--target SkalePluginSelfTest`). En los cuatro preludios probados el plugin da la misma tonalidad que el analizador de archivos sobre esos mismos 60 s.
 
-**Licencia de JUCE:** JUCE se ofrece bajo AGPLv3 o con licencia comercial. Skale es propietario, así que **para distribuir el plugin hace falta la licencia comercial de JUCE** (compilarlo para uso propio no lo requiere). Alternativa sin JUCE: el SDK de VST3 (MIT) o CLAP, con una interfaz propia.
+**Licencias:** Skale es software libre bajo la **GNU AGPL v3** (o posterior), como JUCE, que se usa bajo esa misma licencia; el SDK de ARA es Apache 2.0. Quien distribuya el plugin (también modificado) tiene que ofrecer su código fuente bajo la AGPL. Ver [LICENSE](LICENSE) y [NOTICE.md](NOTICE.md).
 
 Limitaciones: el resultado no se guarda con el proyecto (con ARA se vuelve a analizar al abrirlo). La lectura de regiones por ARA está validada con `auval` y pluginval, pero falta probarla dentro de Logic.
 
@@ -313,4 +313,4 @@ Con la misma configuración (Temperley, 4 s, 0,5) el peso del final mejora en lo
 
 ## Licencia
 
-Copyright © 2026 Pablo Olivares Rodriguez. **Todos los derechos reservados.** Ver [LICENSE](LICENSE).
+Copyright © 2026 Pablo Olivares Rodriguez. Software libre bajo la **GNU Affero General Public License v3 o posterior** ([LICENSE](LICENSE)). Componentes de terceros y datos de entrenamiento: [NOTICE.md](NOTICE.md).

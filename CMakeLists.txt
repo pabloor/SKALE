@@ -46,8 +46,7 @@ if(SKALE_BUILD_TESTS)
 endif()
 
 # Plugin (VST3 y aplicación independiente). JUCE se descarga al configurar; no
-# está en el repo. OJO: JUCE es AGPLv3 o licencia comercial; para distribuir el
-# plugin con la licencia propietaria de Skale hace falta la licencia comercial.
+# está en el repo. JUCE se usa bajo la AGPLv3, la misma licencia que Skale (ver LICENSE y NOTICE.md).
 option(SKALE_BUILD_PLUGIN "Construir el plugin JUCE (descarga JUCE)" OFF)
 if(SKALE_BUILD_PLUGIN)
   enable_language(C)

@@ -185,4 +185,5 @@ están en git. Para volver a entrenar o medir: crear `.venv` y seguir `docs/entr
 - Commits en `main`. Los pesos van compilados en el binario (sin archivos externos).
 - El proyecto no es de pago (octubre de 2026): se pueden usar datos y modelos de licencia no comercial para
   entrenar. Herramientas externas (madmom, Essentia) solo para contrastar resultados, sin añadir su código.
-- Licencia de JUCE: AGPL o comercial; sin la comercial, el plugin distribuido tiene que ser AGPL (código abierto).
+- Licencia: Skale es AGPL-3.0-or-later desde el 16-10-2026 (LICENSE, NOTICE.md), compatible con JUCE (AGPL) y ARA (Apache 2.0).
+  El zip para compartir lleva LICENSE, NOTICE y el enlace al código.
