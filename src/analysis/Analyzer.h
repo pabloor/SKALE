@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -33,6 +34,8 @@ struct AnalysisOptions {
     double bassWeight = 1;       // peso del bajo (tónica y quinta) en la tonalidad; 0 = off
     double chordWeight = 0;      // peso de los acordes detectados (diatónicos y de tónica); 0 = off
     double endingWeight = 0.5;   // 0 = no usar el final (ver KeyDetector::detect)
+    // Avance del análisis, de 0 a 1 (cromagrama hasta 0,2; redes el resto). Se llama desde el hilo que analiza.
+    std::function<void(float)> progress;
 };
 
 struct ChordUsage {

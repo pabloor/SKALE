@@ -372,17 +372,19 @@ std::array<float, 24> specNetLogProbs(const std::vector<FrameChroma>& frames, co
 
 }  // namespace
 
-std::array<float, 24> cnnKeyLogProbs(const std::vector<FrameChroma>& frames) {
+std::array<float, 24> cnnKeyLogProbs(const std::vector<FrameChroma>& frames, const std::function<void(float)>& progress) {
     std::array<float, 24> out{};
     if (frames.size() < 8) return out;
     const float wc = cnn::kNetCount ? 1.f - cnn::kSpecWeight : 0.f, ws = cnn::kSpecNetCount ? cnn::kSpecWeight : 0.f;
     for (int k = 0; k < cnn::kNetCount; ++k) {
         const auto lp = netLogProbs(frames, cnn::kNets[k]);
         for (std::size_t i = 0; i < 24; ++i) out[i] += wc * lp[i] / float(cnn::kNetCount);
+        if (progress) progress(float(k + 1) / float(cnn::kNetCount + cnn::kSpecNetCount));
     }
     for (int k = 0; k < cnn::kSpecNetCount; ++k) {
         const auto lp = specNetLogProbs(frames, cnn::kSpecNets[k]);
         for (std::size_t i = 0; i < 24; ++i) out[i] += ws * lp[i] / float(cnn::kSpecNetCount);
+        if (progress) progress(float(cnn::kNetCount + k + 1) / float(cnn::kNetCount + cnn::kSpecNetCount));
     }
     return out;
 }

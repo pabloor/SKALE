@@ -10,7 +10,7 @@ namespace {
 
 // Mezcla a mono un trozo de un lector y lo añade a `mono`.
 bool appendMono(juce::AudioFormatReader& reader, juce::int64 start, juce::int64 end, std::vector<float>& mono,
-                const std::function<bool()>& cancelled) {
+                const std::function<bool()>& cancelled, const std::function<void(juce::int64)>& advanced) {
     const int ch = int(std::max<unsigned>(1u, reader.numChannels));
     juce::AudioBuffer<float> buf(ch, 65536);
     for (juce::int64 pos = start; pos < end; pos += 65536) {
@@ -22,6 +22,7 @@ bool appendMono(juce::AudioFormatReader& reader, juce::int64 start, juce::int64 
             for (int c = 0; c < ch; ++c) sum += buf.getReadPointer(c)[i];
             mono.push_back(sum / float(ch));
         }
+        advanced(n);
     }
     return true;
 }
@@ -44,6 +45,10 @@ public:
 
     JobStatus runJob() override {
         auto cancelled = [this] { return shouldExit() || proc_.jobId_.load() != id_; };
+        auto setProgress = [this](float p) { if (proc_.jobId_.load() == id_) proc_.progress_.store(p); };
+        juce::int64 total = 0, done = 0;   // muestras por leer: la lectura es el primer 10 % de la barra
+        auto advanced = [&](juce::int64 n) { done += n; if (total > 0) setProgress(0.1f * float(done) / float(total)); };
+        setProgress(0.f);
         std::vector<float> mono;
         if (file != juce::File()) {
             juce::AudioFormatManager fm;
@@ -52,10 +57,12 @@ public:
             if (!reader || reader->lengthInSamples <= 0) return fail("Could not read the file (wav, aiff, flac, ogg, mp3).");
             sampleRate = reader->sampleRate;
             mono.reserve(std::size_t(reader->lengthInSamples));
-            if (!appendMono(*reader, 0, reader->lengthInSamples, mono, cancelled)) return jobHasFinished;
+            total = reader->lengthInSamples;
+            if (!appendMono(*reader, 0, reader->lengthInSamples, mono, cancelled, advanced)) return jobHasFinished;
         } else if (!parts.empty()) {
+            for (auto& part : parts) total += part.end - part.start;
             for (auto& part : parts) {
-                if (!appendMono(*part.reader, part.start, part.end, mono, cancelled)) {
+                if (!appendMono(*part.reader, part.start, part.end, mono, cancelled, advanced)) {
                     if (cancelled()) return jobHasFinished;
                     return fail("Could not read the region audio from the host.");
                 }
@@ -68,7 +75,9 @@ public:
 
         SongState st;
         st.source = source_;
-        st.result = skale::analyze(mono.data(), mono.size(), sampleRate);
+        skale::AnalysisOptions options;
+        options.progress = [&](float p) { setProgress(0.1f + 0.9f * p); };
+        st.result = skale::analyze(mono.data(), mono.size(), sampleRate, options);
         if (!st.result.valid) return fail("No usable audio (silence).");
         st.status = SongState::Status::Done;
         return finish(std::move(st));
@@ -333,7 +342,9 @@ void SkaleProcessor::analyzeRegionsIfChanged() {
 
 SongState SkaleProcessor::state() const {
     std::lock_guard<std::mutex> lock(stateMutex_);
-    return state_;
+    SongState s = state_;
+    s.progress = progress_.load();
+    return s;
 }
 
 void SkaleProcessor::analyzeFile(const juce::File& f) {

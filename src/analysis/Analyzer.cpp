@@ -30,7 +30,12 @@ SongAnalysis analyze(const float* mono, std::size_t n, double sampleRate, const 
     if (n == 0 || sampleRate <= 0) return out;
 
     ChromaExtractor extractor(sampleRate, options.chroma);
-    std::vector<ChromaFrame> frames = extractor.process(mono, n);
+    std::vector<ChromaFrame> frames;
+    const std::size_t chunk = std::size_t(10 * sampleRate);   // por trozos de 10 s, para informar del avance
+    for (std::size_t pos = 0; pos < n; pos += chunk) {
+        for (auto& f : extractor.process(mono + pos, std::min(chunk, n - pos))) frames.push_back(f);
+        if (options.progress) options.progress(0.2f * float(std::min(n, pos + chunk)) / float(n));
+    }
     for (auto& f : extractor.flush()) frames.push_back(f);
 
     Chroma36 acc{};
@@ -170,7 +175,8 @@ SongAnalysis analyze(const float* mono, std::size_t n, double sampleRate, const 
 
     std::vector<KeyCandidate> cnnCandidates;
     if (options.cnn) {
-        auto lp = cnnKeyLogProbs(out.frames);
+        auto lp = cnnKeyLogProbs(out.frames, options.progress
+            ? std::function<void(float)>([&](float p) { options.progress(0.2f + 0.8f * p); }) : std::function<void(float)>());
         const double w = out.durationSeconds >= options.longSeconds ? options.cnnWeightLong : options.cnnWeight;
         if (options.learnedModel && w < 1.0) {   // combinación con el modelo lineal (no se calcula si su peso es 0)
             const auto lin = KeyDetector::learnedLogProbs(out.chroma, out.bassChroma, options.endingSeconds > 0 ? &out.endingChroma : nullptr, &votes);

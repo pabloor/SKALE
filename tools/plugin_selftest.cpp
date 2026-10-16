@@ -10,8 +10,25 @@
 #include "../src/plugin/PluginEditor.h"
 #include "../src/plugin/PluginProcessor.h"
 
+static void snapshot(SkaleProcessor& proc, const juce::String& png) {
+    std::unique_ptr<juce::AudioProcessorEditor> ed(proc.createEditor());
+    static_cast<SkaleEditor*>(ed.get())->refresh();
+    auto img = ed->createComponentSnapshot(ed->getLocalBounds());
+    juce::File out(png);
+    out.deleteFile();
+    juce::FileOutputStream os(out);
+    juce::PNGImageFormat().writeImageToStream(img, os);
+}
+
 static int finish(SkaleProcessor& proc, const char* png) {
-    for (int i = 0; i < 1200 && proc.state().status == SongState::Status::Working; ++i) juce::Thread::sleep(100);
+    bool middle = false;   // además, una captura con la barra de progreso hacia la mitad (captura.mitad.png)
+    for (int i = 0; i < 6000 && proc.state().status == SongState::Status::Working; ++i) {
+        if (!middle && proc.state().progress >= 0.4f) {
+            snapshot(proc, juce::File(png).withFileExtension(".mitad.png").getFullPathName());
+            middle = true;
+        }
+        juce::Thread::sleep(20);
+    }
     const auto st = proc.state();
     if (st.status != SongState::Status::Done) {
         std::printf("estado=%d error=%s\n", int(st.status), st.error.toRawUTF8());
@@ -23,13 +40,7 @@ static int finish(SkaleProcessor& proc, const char* png) {
     for (auto& n : r.scaleNotes) std::printf("%s ", n.c_str());
     std::printf(" 2a=%s\n", r.secondKeyName.c_str());
 
-    std::unique_ptr<juce::AudioProcessorEditor> ed(proc.createEditor());
-    static_cast<SkaleEditor*>(ed.get())->refresh();
-    auto img = ed->createComponentSnapshot(ed->getLocalBounds());
-    juce::File out(png);
-    out.deleteFile();
-    juce::FileOutputStream os(out);
-    juce::PNGImageFormat().writeImageToStream(img, os);
+    snapshot(proc, png);
     return 0;
 }
 

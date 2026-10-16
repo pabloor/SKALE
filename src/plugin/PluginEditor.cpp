@@ -60,7 +60,7 @@ SkaleEditor::SkaleEditor(SkaleProcessor& p)
     analyzeButton_.onClick = [this] { processor_.analyzeAgain(); refresh(); };
     finishButton_.onClick = [this] { processor_.stopListening(); refresh(); };
     openButton_.onClick = [this] { chooseFile(); };
-    startTimerHz(5);
+    startTimerHz(10);
     refresh();
 }
 
@@ -116,7 +116,18 @@ void SkaleEditor::paint(juce::Graphics& g) {
     switch (state_.status) {
         case S::Idle:      paintMessage(g, area, processor_.usesARA() ? "Waiting for audio..." : "Analyze or open a file", {}); break;
         case S::Listening: paintMessage(g, area, "Listening...  " + clock(state_.listenedSeconds), {}); break;
-        case S::Working:   paintMessage(g, area, "Analyzing...", {}); break;
+        case S::Working: {
+            auto top = area.removeFromTop(area.getHeight() / 2);
+            g.setColour(juce::Colours::white.withAlpha(0.6f));
+            g.setFont(juce::FontOptions(18.f));
+            g.drawText("Analyzing...  " + juce::String(juce::roundToInt(state_.progress * 100.f)) + " %", top, juce::Justification::centredBottom);
+            auto bar = area.removeFromTop(30).withSizeKeepingCentre(area.getWidth() - 40, 10).toFloat();
+            g.setColour(juce::Colours::white.withAlpha(0.12f));
+            g.fillRoundedRectangle(bar, 5.f);
+            g.setColour(kAccent);
+            g.fillRoundedRectangle(bar.withWidth(bar.getWidth() * juce::jlimit(0.f, 1.f, state_.progress)), 5.f);
+            break;
+        }
         case S::Error:     paintMessage(g, area, state_.error, {}); break;
         case S::Done:      paintResult(g, area); break;
     }

@@ -19,6 +19,7 @@ struct SongState {
     juce::String source;            // de dónde sale: archivo, región(es) de la pista, audio escuchado
     juce::String error;
     double listenedSeconds = 0;     // mientras se escucha
+    float progress = 0;             // mientras se analiza, de 0 a 1
     skale::SongAnalysis result;
 };
 
@@ -85,6 +86,7 @@ private:
 
     mutable std::mutex stateMutex_;
     SongState state_;
+    std::atomic<float> progress_{0};
     std::atomic<int> jobId_{0};                // un análisis nuevo invalida el anterior
     juce::ThreadPool pool_{1};
     friend class SongAnalysisJob;
