@@ -8,7 +8,8 @@ const juce::Colour kBg(0xff15181d), kAccent(0xff5bd6a6), kWarn(0xffe6b450);
 
 bool isAudioFile(const juce::String& path) {
     const auto ext = juce::File(path).getFileExtension().toLowerCase();
-    return ext == ".wav" || ext == ".aiff" || ext == ".aif" || ext == ".flac" || ext == ".ogg" || ext == ".mp3";
+    return ext == ".wav" || ext == ".aiff" || ext == ".aif" || ext == ".flac" || ext == ".ogg" || ext == ".mp3"
+        || ext == ".m4a" || ext == ".aac" || ext == ".caf";   // los tres últimos, con el lector de macOS
 }
 
 skale::Key relativeOf(const skale::Key& k) {
@@ -93,7 +94,7 @@ void SkaleEditor::filesDropped(const juce::StringArray& files, int, int) {
 }
 
 void SkaleEditor::chooseFile() {
-    chooser_ = std::make_unique<juce::FileChooser>("Choose an audio file", juce::File(), "*.wav;*.aiff;*.aif;*.flac;*.ogg;*.mp3");
+    chooser_ = std::make_unique<juce::FileChooser>("Choose an audio file", juce::File(), "*.wav;*.aiff;*.aif;*.flac;*.ogg;*.mp3;*.m4a;*.aac;*.caf");
     chooser_->launchAsync(juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
                           [this](const juce::FileChooser& fc) {
                               const auto f = fc.getResult();

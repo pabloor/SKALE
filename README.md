@@ -34,7 +34,7 @@ JUCE (8.0.15) se descarga al configurar; no está en el repo. En Linux hacen fal
 
 - **Con ARA** (Logic Pro, Studio One, Cubase, Reaper...): lee el audio entero de las regiones de la pista sin reproducirlas y lo analiza en segundo plano; si las regiones cambian, vuelve a analizar. El plugin reproduce esas regiones sin tocarlas. SDK de ARA 2.3.0 (Celemony, Apache 2.0), que se descarga al configurar.
 - **Sin ARA:** «Analyze song» escucha la canción mientras se reproduce (hasta 10 min) y, al parar, la analiza entera. En la aplicación independiente se termina con «Finish now».
-- **Archivo:** arrastra un wav, aiff, flac, ogg o mp3 a la ventana o pulsa «Open file...».
+- **Archivo:** arrastra un wav, aiff, flac, ogg, mp3, m4a, aac o caf a la ventana o pulsa «Open file...» (m4a, aac y caf con el lector de macOS).
 
 Interfaz mínima: la escala en grande, con su relativa al lado si está en duda («Ab major / F minor»: mismas notas; al menos el 30 % de la probabilidad de la 1ª), y debajo «or X» si además una escala con otras notas tiene al menos la mitad; y los botones «Analyze» (con ARA vuelve a analizar las regiones; sin ARA escucha la canción) y «Open file...». Mientras analiza, una barra de progreso real (lectura del audio, cromagrama y cada red; `AnalysisOptions::progress`). La segunda opción con otras notas sale en ~1 de cada 5 canciones. Con las 11 redes actuales (medido en C++ con las versiones `split`, que no han visto estas canciones): en 1.096 canciones completas de FMA la escala exacta acierta el **71,4 %**, las notas (escala o relativa) el **78,8 %** y las notas correctas están entre lo mostrado el **84,4 %**; en GTZAN (fragmentos de 30 s de música comercial), 71,2 / 75,1 / 82,0 %.
 

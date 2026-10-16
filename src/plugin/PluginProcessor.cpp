@@ -54,7 +54,7 @@ public:
             juce::AudioFormatManager fm;
             fm.registerBasicFormats();
             std::unique_ptr<juce::AudioFormatReader> reader(fm.createReaderFor(file));
-            if (!reader || reader->lengthInSamples <= 0) return fail("Could not read the file (wav, aiff, flac, ogg, mp3).");
+            if (!reader || reader->lengthInSamples <= 0) return fail("Could not read the file (wav, aiff, flac, ogg, mp3, m4a, aac, caf).");
             sampleRate = reader->sampleRate;
             mono.reserve(std::size_t(reader->lengthInSamples));
             total = reader->lengthInSamples;
