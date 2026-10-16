@@ -140,18 +140,21 @@ void SkaleEditor::paint(juce::Graphics& g) {
     }
 }
 
-// La escala en grande y, si hay una segunda en duda (la relativa o una escala con otras notas), debajo «or X».
+// La escala en grande, con su relativa al lado si está en duda (mismas notas: «A minor / C major»), y debajo «or X»
+// si además otra escala con notas distintas es casi igual de probable.
 void SkaleEditor::paintResult(juce::Graphics& g, juce::Rectangle<int> area) {
     const auto& r = state_.result;
-    const skale::KeyCandidate* second = otherScaleInDoubt(r);
-    if (second == nullptr) second = relativeInDoubt(r);
-    auto top = second ? area.removeFromTop(area.getHeight() * 3 / 5) : area;
+    const auto* rel = relativeInDoubt(r);
+    const auto* other = otherScaleInDoubt(r);
+    juce::String main = r.keyName;
+    if (rel != nullptr) main += "  /  " + juce::String(skale::keyName(rel->key, false));
+    auto top = other ? area.removeFromTop(area.getHeight() * 3 / 5) : area;
     g.setColour(kAccent);
-    g.setFont(juce::FontOptions(42.f, juce::Font::bold));
-    g.drawText(r.keyName, top, second ? juce::Justification::centredBottom : juce::Justification::centred);
-    if (second) {
+    g.setFont(juce::FontOptions(rel ? 32.f : 42.f, juce::Font::bold));
+    g.drawFittedText(main, top, other ? juce::Justification::centredBottom : juce::Justification::centred, 1);
+    if (other != nullptr) {
         g.setColour(kAccent.withAlpha(0.7f));
         g.setFont(juce::FontOptions(24.f, juce::Font::bold));
-        g.drawText("or " + juce::String(skale::keyName(second->key, false)), area, juce::Justification::centredTop);
+        g.drawText("or " + juce::String(skale::keyName(other->key, false)), area, juce::Justification::centredTop);
     }
 }
