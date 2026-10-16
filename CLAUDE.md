@@ -171,11 +171,12 @@ Tarea auxiliar de notas con Slakh2100 (`tools/get_slakh.py` lee el tar.gz de 104
 mejora (63,2 / 69,8 / 69,4 y 62,8 / 70,2 / 69,8). Datos borrados. Segunda opción = la paralela cuando es
 bastante probable: blues 57 → 70 % con dos opciones, pero FMA completas −0,7: no (convención del blues en GTZAN).
 
-## Disco (13-10-2026)
-En `~/skale-datos` quedan solo los conjuntos que se usan (FMAK en fragmentos y completo, Beatport, GiantSteps+,
-GuitarSet, los pequeños, GTZAN y fma_small para la página de etiquetado). AAM, MusicNet, fma_medium, Lakh,
-FSL10K, los bancos de sonidos, las características de HPSS y de los datos sin etiquetar, y los entornos de
-MERT, madmom y Essentia se movieron a la papelera (~82 GB); se pueden regenerar con sus herramientas.
+## Disco (16-10-2026)
+Todo lo de entrenar se movió a la Papelera (~71 GB): `~/skale-datos` (audio), `~/skale-train` (características),
+`~/skale-runs` (experimentos, copias `srcx`/`srcz`, scripts de medida como `exact/eval.py`, `live/sim.py`,
+`agg/agg.py`, pluginval) y `.venv`. El plugin no los necesita (los pesos van en el binario) y los modelos `.pt`
+están en git. Para volver a entrenar o medir: crear `.venv` y seguir `docs/entrenar_en_mac.md` (`fetch_datasets.py`,
+`get_fmak_full.py` para las canciones completas, `prepare_training.py`); los scripts de medida hay que reescribirlos.
 
 ## Normas
 - Música: conjuntos con licencia abierta y conjuntos de investigación publicados (también con audio comercial,
