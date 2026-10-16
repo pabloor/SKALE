@@ -393,6 +393,13 @@ void SkaleProcessor::stopListening() {
     analyzeSamples(std::move(mono), sampleRate_.load(), "Song played back");
 }
 
+void SkaleProcessor::analyzeAgain() {
+#if JucePlugin_Enable_ARA
+    if (isBoundToARA()) { regionsSignature_.clear(); return; }   // el temporizador lo vuelve a lanzar
+#endif
+    startListening();
+}
+
 void SkaleProcessor::clear() {
     jobId_.fetch_add(1);
     capturing_.store(false);

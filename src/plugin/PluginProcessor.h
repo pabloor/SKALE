@@ -57,6 +57,8 @@ public:
     void analyzeFile(const juce::File& file);
     // Sin ARA: empieza a escuchar (hasta kMaxListenSeconds); termina sola al parar la reproducción o con stopListening().
     void startListening();
+    // Botón «Analyze»: con ARA vuelve a analizar las regiones; sin ARA empieza a escuchar.
+    void analyzeAgain();
     void stopListening();
     void clear();
 

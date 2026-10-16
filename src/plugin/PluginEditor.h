@@ -4,8 +4,8 @@
 
 #include "PluginProcessor.h"
 
-// Una sola pantalla: la escala de la canción entera (y su relativa, si está en duda), su fiabilidad y un aviso si otra
-// escala con notas distintas es casi igual de probable.
+// Una sola pantalla mínima: la escala de la canción entera y, si hay otra casi igual de probable (la relativa o una
+// escala con otras notas), «or X» debajo; botones «Analyze» y «Open file...».
 // Textos en inglés (como Auto-Tune y Melodyne). Con ARA el análisis empieza solo; sin ARA, «Analyze song» escucha la
 // canción mientras suena; en cualquier caso se puede soltar o abrir un archivo.
 class SkaleEditor : public juce::AudioProcessorEditor,
@@ -38,7 +38,7 @@ private:
     SkaleProcessor& processor_;
     SongState state_;
     bool dragOver_ = false;
-    juce::TextButton analyzeButton_{"Analyze song"};
+    juce::TextButton analyzeButton_{"Analyze"};
     juce::TextButton finishButton_{"Finish now"};
     juce::TextButton openButton_{"Open file..."};
     std::unique_ptr<juce::FileChooser> chooser_;

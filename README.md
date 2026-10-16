@@ -36,10 +36,7 @@ JUCE (8.0.15) se descarga al configurar; no está en el repo. En Linux hacen fal
 - **Sin ARA:** «Analyze song» escucha la canción mientras se reproduce (hasta 10 min) y, al parar, la analiza entera. En la aplicación independiente se termina con «Finish now».
 - **Archivo:** arrastra un wav, aiff, flac, ogg o mp3 a la ventana o pulsa «Open file...».
 
-Muestra:
-- la escala y sus 7 notas; si la relativa (mismas notas) tiene al menos el 30 % de la probabilidad de la 1ª, también («A minor / C major (same notes)»);
-- la **fiabilidad**, según la probabilidad de esas 7 notas (la escala más su relativa), calibrada con canciones completas de FMA y GTZAN: High (≥ 0,75; ~92 % de notas correctas, ~40 % de las canciones), Medium (0,5–0,75; ~74 %) y Low (< 0,5; ~52 %);
-- un **aviso** si otra escala con notas distintas tiene al menos la mitad de probabilidad, con las notas que cambian («changes F# -> F»). Sale en ~1 de cada 5 canciones. Con las 11 redes actuales (medido en C++ con las versiones `split`, que no han visto estas canciones): en 1.096 canciones completas de FMA la escala exacta acierta el **71,4 %**, las notas (escala o relativa) el **78,8 %** y las notas correctas están entre lo mostrado el **84,4 %**; en GTZAN (fragmentos de 30 s de música comercial), 71,2 / 75,1 / 82,0 %.
+Interfaz mínima: la escala en grande y, si otra es casi igual de probable, «or X» debajo (la relativa, con las mismas notas, si tiene al menos el 30 % de la probabilidad de la 1ª; o una escala con otras notas si tiene al menos la mitad); y los botones «Analyze» (con ARA vuelve a analizar las regiones; sin ARA escucha la canción) y «Open file...». La segunda opción con otras notas sale en ~1 de cada 5 canciones. Con las 11 redes actuales (medido en C++ con las versiones `split`, que no han visto estas canciones): en 1.096 canciones completas de FMA la escala exacta acierta el **71,4 %**, las notas (escala o relativa) el **78,8 %** y las notas correctas están entre lo mostrado el **84,4 %**; en GTZAN (fragmentos de 30 s de música comercial), 71,2 / 75,1 / 82,0 %.
 
 ![Vista del plugin](docs/plugin.png)
 
