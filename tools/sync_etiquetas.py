@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Trae las respuestas de la página web de etiquetado (https://pabloor.github.io/skale-etiquetar, repositorio
-pabloor/skale-etiquetar) desde la hoja de Google y las guarda en el repositorio:
+"""Trae las respuestas de la página web de etiquetado (https://pabloor.github.io/etiquetar, repositorio
+pabloor/etiquetar) desde la hoja de Google y las guarda en el repositorio:
 
   tools/samples/fma_user_labels.jsonl   todas las respuestas válidas (una por línea, sin las deshechas)
   tools/samples/fma_user_expected.csv   tonalidad acordada por pista de FMA (formato de los demás conjuntos)
