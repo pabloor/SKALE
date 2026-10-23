@@ -1,5 +1,6 @@
 # Compila el plugin para macOS (binario universal: Apple Silicon + Intel) y lo publica.
-# - Al subir una etiqueta vX.Y.Z: crea la versión en GitHub con el zip adjunto
+# - Al publicar una versión desde la web (Releases → Draft a new release → etiqueta vX.Y.Z → Publish release)
+#   o al subir una etiqueta vX.Y.Z con git: adjunta el zip a esa versión
 #   (enlace fijo: https://github.com/pabloor/SKALE/releases/latest).
 # - A mano (pestaña Actions → «Plugin para macOS» → Run workflow): deja el zip como artefacto de esa ejecución.
 # El plugin va firmado solo «ad hoc» (sin cuenta de Apple Developer): macOS avisa al abrirlo la primera vez.
@@ -8,7 +9,13 @@ name: Plugin para macOS
 on:
   push:
     tags: ['v*']
+  release:
+    types: [published]
   workflow_dispatch:
+
+# Si la etiqueta se crea al publicar desde la web llegan dos eventos (etiqueta y versión): uno detrás de otro.
+concurrency:
+  group: release-${{ github.event.release.tag_name || github.ref_name }}
 
 permissions:
   contents: write
@@ -54,8 +61,10 @@ jobs:
           for i in 1 2 3; do auval -v aufx Skal Pabo && exit 0; sleep 10; done; exit 1
 
       - name: Empaquetar
+        env:
+          TAG: ${{ github.event.release.tag_name || (github.ref_type == 'tag' && github.ref_name) || '' }}
         run: |
-          VER="${GITHUB_REF_NAME}"; [ "${GITHUB_REF_TYPE}" = tag ] || VER="dev-${GITHUB_SHA::7}"
+          VER="${TAG:-dev-${GITHUB_SHA::7}}"
           A=build-plugin/SkalePlugin_artefacts/Release
           D="dist/Skale-${VER}-macOS"
           mkdir -p "$D"
@@ -87,8 +96,15 @@ jobs:
           name: Skale-macOS
           path: ${{ env.ZIP }}
 
-      - name: Publicar la versión
-        if: github.ref_type == 'tag'
+      - name: Adjuntar el zip a la versión publicada desde la web
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: ${{ env.ZIP }}
+
+      - name: Publicar la versión (etiqueta subida con git)
+        if: github.event_name == 'push' && github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ env.ZIP }}

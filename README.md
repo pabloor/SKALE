@@ -23,7 +23,7 @@ Solo hace falta un compilador C++17 y CMake. `third_party/dr_libs` (dr_wav, dr_m
 
 ## Plugin (VST3, AU y aplicación independiente)
 
-**Descarga para macOS** (Apple Silicon e Intel): [última versión](https://github.com/pabloor/SKALE/releases/latest), con instrucciones en `LEEME.txt` dentro del zip. La compila GitHub Actions (`.github/workflows/release-macos.yml`) cada vez que se sube una etiqueta `vX.Y.Z` (`git tag v0.1.1 && git push origin v0.1.1`). Va firmada solo «ad hoc»: la primera vez macOS avisa de que el desarrollador no está identificado; para evitarlo hace falta firmarla y notarizarla con una cuenta de Apple Developer.
+**Descarga para macOS** (Apple Silicon e Intel): [última versión](https://github.com/pabloor/SKALE/releases/latest), con instrucciones en `LEEME.txt` dentro del zip. La compila GitHub Actions (`.github/workflows/release-macos.yml`) al publicar una versión: en GitHub, **Releases → Draft a new release**, etiqueta nueva `vX.Y.Z` y **Publish release** (o `git tag v0.1.1 && git push origin v0.1.1`); unos 10 minutos después el zip aparece adjunto. Va firmada solo «ad hoc»: la primera vez macOS avisa de que el desarrollador no está identificado; para evitarlo hace falta firmarla y notarizarla con una cuenta de Apple Developer.
 
 Compilarlo uno mismo:
 
