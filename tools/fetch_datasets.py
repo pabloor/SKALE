@@ -15,6 +15,7 @@ Conjuntos (carpeta dentro de DATOS, tamaño aproximado de la descarga):
   set2, set6 piezas CC con la tonalidad en el título del autor, archive.org (grupo «author»)
   set4, set5 Jamendo CC con etiqueta por consenso de varios detectores, archive.org (grupo «jamendo_cons»)
   synth      108 progresiones sintéticas generadas aquí (tools/gen_synth_training.py)
+  fma_user   pistas de FMA etiquetadas a mano en la página web (tools/sync_etiquetas.py), del zip de fma_large
   gtzan      GTZAN, 837 fragmentos de 30 s con tonalidad (Lerch), Hugging Face (~1,2 GB): solo para evaluar
 El grupo «folk_synth» (29 melodías de music21 sintetizadas) no se descarga: necesita music21 y fluidsynth
 (tools/render_corpus.py); son pocas pistas y el entrenamiento funciona sin ellas.
@@ -141,6 +142,36 @@ def fetch_gtzan(d):
     copy_csv('gtzan_expected.csv', f'{d}/expected.csv')
 
 
+def fetch_fma_user(d):
+    """Pistas de FMA etiquetadas a mano en la página web (tools/sync_etiquetas.py): el audio se saca del zip de
+    fma_large por rangos HTTP, como get_fmak.py."""
+    import threading
+    from remotezip import RemoteZip
+    src = os.path.join(SAMPLES, 'fma_user_expected.csv')
+    if not os.path.exists(src): print('  todavía no hay etiquetas de la página web (tools/sync_etiquetas.py)'); return
+    os.makedirs(d, exist_ok=True)
+    rows = list(csv.reader(open(src)))
+    todo = [fn for fn, _ in rows if not os.path.exists(f'{d}/{fn}')]
+    lock = threading.Lock()
+
+    def worker():
+        rz = None
+        while True:
+            with lock:
+                if not todo: return
+                fn = todo.pop()
+            t = int(fn[:6])
+            for _ in range(3):
+                try:
+                    rz = rz or RemoteZip('https://os.unil.cloud.switch.ch/fma/fma_large.zip')
+                    open(f'{d}/{fn}', 'wb').write(rz.read(f'fma_large/{t // 1000:03d}/{fn}')); break
+                except Exception:
+                    rz = None; time.sleep(2)
+    ths = [threading.Thread(target=worker) for _ in range(8)]
+    [t.start() for t in ths]; [t.join() for t in ths]
+    copy_csv('fma_user_expected.csv', f'{d}/expected.csv')
+
+
 def fetch_synth(d):
     os.makedirs(d, exist_ok=True)
     if not os.path.exists(f'{d}/expected.csv'): subprocess.run([sys.executable, os.path.join(HERE, 'gen_synth_training.py'), d], check=True)
@@ -148,7 +179,7 @@ def fetch_synth(d):
 
 SETS = dict(synth=fetch_synth, bach=fetch_bach, classic=fetch_classic, set2=fetch_set2, set6=fetch_set6, set4=fetch_set4,
             set5=fetch_set5, guitarset=fetch_guitarset, gsplus=fetch_gsplus, beatport=fetch_beatport, fma=fetch_fma,
-            gtzan=fetch_gtzan)
+            gtzan=fetch_gtzan, fma_user=fetch_fma_user)
 
 
 def main():

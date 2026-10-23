@@ -77,6 +77,13 @@ de cromagrama juntas, FMA 60,7 % y 64,7 %.
 
 ## Etiquetar más pistas a mano (opcional)
 
+**Desde cualquier navegador, sin instalar nada:** https://pabloor.github.io/skale-etiquetar/ (repositorio
+`pabloor/skale-etiquetar`, 500 fragmentos por tanda). Las respuestas van a una hoja de Google;
+`python3 tools/sync_etiquetas.py URL_EXEC CLAVE` las pasa a `tools/samples/fma_user_expected.csv` (y
+`fma_user_labels.jsonl`), y `tools/fetch_datasets.py DATOS --solo fma_user` baja su audio para entrenar.
+
+En local, con la página de este repositorio:
+
 Más música real etiquetada es lo que más puede mejorar las redes. Con las pistas de FMA que no están en FMAK:
 
 ```sh
