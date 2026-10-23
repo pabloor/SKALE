@@ -1,0 +1,97 @@
+# Compila el plugin para macOS (binario universal: Apple Silicon + Intel) y lo publica.
+# - Al subir una etiqueta vX.Y.Z: crea la versión en GitHub con el zip adjunto
+#   (enlace fijo: https://github.com/pabloor/SKALE/releases/latest).
+# - A mano (pestaña Actions → «Plugin para macOS» → Run workflow): deja el zip como artefacto de esa ejecución.
+# El plugin va firmado solo «ad hoc» (sin cuenta de Apple Developer): macOS avisa al abrirlo la primera vez.
+name: Plugin para macOS
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar
+        run: |
+          cmake -S . -B build-plugin -DSKALE_BUILD_PLUGIN=ON -DCMAKE_BUILD_TYPE=Release \
+            "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+
+      - name: Compilar
+        run: |
+          cmake --build build-plugin -j "$(sysctl -n hw.ncpu)" \
+            --target skale_tests SkalePlugin_VST3 SkalePlugin_AU SkalePlugin_Standalone
+
+      - name: Tests del analizador
+        run: ./build-plugin/skale_tests
+
+      - name: Firmar (ad hoc) y comprobar que es universal
+        run: |
+          A=build-plugin/SkalePlugin_artefacts/Release
+          for b in "$A/VST3/Skale.vst3" "$A/AU/Skale.component" "$A/Standalone/Skale.app"; do
+            codesign --force --deep --sign - "$b"
+            codesign --verify --deep --strict "$b"
+          done
+          for x in "$A/VST3/Skale.vst3" "$A/AU/Skale.component" "$A/Standalone/Skale.app"; do
+            archs=$(lipo -archs "$x/Contents/MacOS/Skale"); echo "$x: $archs"
+            case "$archs" in *arm64*) ;; *) exit 1 ;; esac
+            case "$archs" in *x86_64*) ;; *) exit 1 ;; esac
+          done
+
+      - name: Validar el AU
+        run: |
+          mkdir -p ~/Library/Audio/Plug-Ins/Components
+          cp -R build-plugin/SkalePlugin_artefacts/Release/AU/Skale.component ~/Library/Audio/Plug-Ins/Components/
+          killall -9 AudioComponentRegistrar 2>/dev/null || true
+          for i in 1 2 3; do auval -v aufx Skal Pabo && exit 0; sleep 10; done; exit 1
+
+      - name: Empaquetar
+        run: |
+          VER="${GITHUB_REF_NAME}"; [ "${GITHUB_REF_TYPE}" = tag ] || VER="dev-${GITHUB_SHA::7}"
+          A=build-plugin/SkalePlugin_artefacts/Release
+          D="dist/Skale-${VER}-macOS"
+          mkdir -p "$D"
+          ditto "$A/VST3/Skale.vst3" "$D/Skale.vst3"
+          ditto "$A/AU/Skale.component" "$D/Skale.component"
+          ditto "$A/Standalone/Skale.app" "$D/Skale.app"
+          cp LICENSE NOTICE.md "$D/"
+          cat > "$D/LEEME.txt" <<EOF
+          Skale ${VER} para macOS (Apple Silicon e Intel, macOS 11 o posterior)
+
+          Instalar:
+            - AU (Logic Pro, GarageBand): copia Skale.component en ~/Library/Audio/Plug-Ins/Components/
+            - VST3 (Ableton, Cubase, Reaper, Studio One...): copia Skale.vst3 en ~/Library/Audio/Plug-Ins/VST3/
+            - Aplicación independiente: arrastra Skale.app a Aplicaciones.
+            (En el Finder, Ir > Ir a la carpeta... y escribe la ruta.)
+
+          El plugin no está firmado con un certificado de Apple. Si macOS lo bloquea, abre la Terminal y ejecuta:
+            xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/Components/Skale.component ~/Library/Audio/Plug-Ins/VST3/Skale.vst3 /Applications/Skale.app
+          Después reinicia el programa de audio. La app también se abre con clic derecho > Abrir.
+
+          Código fuente y licencia (GNU AGPL v3 o posterior): https://github.com/${GITHUB_REPOSITORY}
+          EOF
+          (cd dist && ditto -c -k --keepParent "Skale-${VER}-macOS" "Skale-${VER}-macOS.zip")
+          echo "ZIP=dist/Skale-${VER}-macOS.zip" >> "$GITHUB_ENV"
+
+      - name: Guardar como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: Skale-macOS
+          path: ${{ env.ZIP }}
+
+      - name: Publicar la versión
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ZIP }}
+          body: |
+            Plugin Skale para macOS (AU, VST3 y aplicación independiente; Apple Silicon e Intel).
+            Descarga el zip de abajo y sigue LEEME.txt. No está firmado por Apple: la primera vez macOS avisa.
